@@ -9,7 +9,7 @@
 // أسماء القنوات المكتوبة وأي دليل ينتمي لأي قناة بالسيرفر وحده
 // (src/server/cases/scene-17/channels.ts).
 // ============================================================
-import { NO_AI, NO_SYSTEMS, type CaseContract } from '../contract';
+import { NO_AI, NO_RUNTIME, NO_SYSTEMS, type CaseContract } from '../contract';
 
 const CHANNEL_IDS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const;
 
@@ -41,4 +41,6 @@ export const SCENE_17_CONTRACT: CaseContract = {
   // الحالة تبقى 'development': لا يُفتح إلا تحت next dev / IFADA_DEV_CASES.
   systems: { ...NO_SYSTEMS, evidence: true, evidenceMedia: true, connections: true },
   ai: { ...NO_AI, groundedSearch: true, hypothesisStressTest: true },
+  // لا محرك للمشهد 17 بعد: لا محتوى runtime ولا تغيير على قنواته.
+  runtime: NO_RUNTIME,
 };

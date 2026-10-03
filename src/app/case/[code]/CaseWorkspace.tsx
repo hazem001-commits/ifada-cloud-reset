@@ -25,6 +25,8 @@ import { useMySpecializations } from "./useMySpecializations";
 import { CaseProvider } from "@/cases/CaseContext";
 import { getCaseContract } from "@/cases/registry";
 import { visibleEvidenceRows } from "@/lib/evidenceVisibility";
+import RuntimeInspector from "./runtime/RuntimeInspector";
+import { runtimeInspectorEnabled } from "@/lib/runtime/devGate";
 
 type Tab = CaseTab;
 export default function CaseWorkspace({
@@ -186,6 +188,11 @@ export default function CaseWorkspace({
         }
       >
         <CaseAutomation sessionId={sessionId} />
+
+        {/* DEV ONLY: مفتش المحرك (RESET-1) — لا يظهر بالإنتاج. */}
+        {runtimeInspectorEnabled(getCaseContract(caseId)) && (
+          <RuntimeInspector sessionId={sessionId} myId={myId} members={members} />
+        )}
 
         <CaseNav
           tab={tab}

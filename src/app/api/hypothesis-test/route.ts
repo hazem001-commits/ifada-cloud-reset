@@ -12,6 +12,8 @@ import { loadAuthorizedKnowledge, type AuthorizedKnowledgeSource } from '@/lib/a
 import { chatCompletion, providerAvailable } from '@/lib/ai/provider';
 import { runStressTest } from '@/lib/ai/stressTest';
 import { getCaseContract } from '@/cases/registry';
+import { teamReadableEvidence } from '@/server/cases/registry';
+import { runtimeKnowledgeFor } from '@/server/runtime/readModel';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -87,6 +89,9 @@ export async function POST(request: NextRequest) {
       const { data, error } = await userClient.rpc('challenge_index', { p_session: sessionId });
       return error ? [] : ((data ?? []) as { code: string }[]).map((c) => c.code);
     },
+    teamReadableEvidence: (caseId, evidence) => teamReadableEvidence(caseId, evidence),
+    // المحرك (037) بعميل اللاعب نفسه؛ قبل تطبيقه أو لقضية لا تفعّله → null.
+    runtime: (sessionId, caseId) => runtimeKnowledgeFor(userClient, sessionId, caseId),
   };
 
   try {

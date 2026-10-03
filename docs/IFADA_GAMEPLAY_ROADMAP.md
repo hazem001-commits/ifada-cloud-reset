@@ -22,6 +22,15 @@ Source of sequencing truth for the post-redesign investigation engine. Not a des
 
 Phase 6 has **not** started.
 
+## Game Experience Reset track (docs/IFADA_MASTER_GAME_RESET_v1.md)
+
+| Step | Name | Status |
+|---|---|---|
+| RESET-1 | Investigation Runtime foundation | IMPLEMENTED IN CODE — `sql/037` REVIEW ONLY, NOT APPLIED (awaiting Hazem's SQL review) |
+| RESET-2 … RESET-11 | see master reset §13 | Not started |
+
+RESET-1 adds the shared runtime (leads, world states, gated places, Investigation Pulse, runtime provenance, bounded per-session cascade) as an engine only: no case runtime rules are seeded, so Room 714 and Scene 17 play exactly as before until approved rules exist. Live rules live only in `case_runtime_rules` (database). See `sql/MIGRATIONS.md` row 37.
+
 ## Phase 5 status
 
 **Functionally complete.** SQL `025` is applied live. Manual 2-player QA passed for:

@@ -19,16 +19,31 @@
 //
 // لا معرّفات قواعد ولا معرّفات كيانات رسمية بالمخرج أبداً.
 // AuthorizedKnowledge نوع "موسوم": لا يُصنع إلا بـ buildAuthorizedKnowledge.
+//
+// RESET-1 (sql/037): المحرك يضيف — للاعب نفسه فقط — الخيوط التي يحملها
+// أو المشتركة، حالات العالم التي بلغها الفريق، والأماكن المغلقة التي
+// كُشفت له. كل حقيقة تحمل `team`: ما يعرفه الفريق كله منها (أساس
+// TeamKnowledge، src/lib/runtime/teamKnowledge.ts). النبضات (Pulse) لا
+// تدخل هنا أبداً: هي إشارة اجتماعية لا معرفة قضية.
 // ============================================================
 import type { Specialization } from '@/types/database';
 import type { EvidenceRow, LogRow, ObjectRow, SubjectRow } from '@/lib/inquiry/search';
 import type { KnowledgeView, NodeRef } from '@/lib/connections/types';
 import { evidenceVisibility, type EvidenceVisibility, type RestrictedEvidencePolicy } from '@/lib/evidenceVisibility';
 import { earnedFromAuthorized, entityViewFor, type AuthoredEntity, type EntityView } from '@/lib/entities/progressive';
+import type { RuntimeKnowledgeInput } from '@/lib/runtime/types';
 
 declare const AUTHORIZED: unique symbol;
 
-export type FactKind = 'evidence' | 'object' | 'statement' | 'connection' | 'entity';
+export type FactKind = 'evidence' | 'object' | 'statement' | 'connection' | 'entity' | 'lead' | 'world_state' | 'place';
+
+/**
+ * ما يعرفه الفريق كله من هذه الحقيقة (من منظور توزيع القضية بالسيرفر):
+ *   full  — كل عضو يقرأ المحتوى (مشترك / مسار مشترك / حدث فريق)
+ *   title — كل عضو يرى العنوان فقط (سياسة title بغرفة 714)
+ *   none  — ليست معرفة فريق (خاصة باللاعب، أو قناة خاصة، أو مشتقة له)
+ */
+export type TeamVisibility = 'full' | 'title' | 'none';
 
 /** حقيقة كما تظهر للاعب — كلها وصلت له أصلاً عبر مسار مصرّح. */
 export interface AuthorizedFact {
@@ -43,6 +58,7 @@ export interface AuthorizedFact {
   clock: string | null;
   /** لـ restricted فقط: من يملك قراءته (كما يعرضه سطح اللاعب). */
   ownerSpec: Specialization | null;
+  team: TeamVisibility;
 }
 
 /** قاعدة يحق للاعب فحصها — القدرة فقط، لا محتوى القاعدة. */
@@ -86,6 +102,13 @@ export interface AuthorizedInput {
   tools: string[];
   challengeCodes: string[];
   connectionsEnabled: boolean;
+  /**
+   * أكواد أدلة يقرؤها كل عضو بتوزيع القضية (مسار مشترك بقضية قنوات).
+   * غيابها = لا محتوى دليل في معرفة الفريق (مغلق عند الشك).
+   */
+  teamReadableEvidence?: readonly string[];
+  /** قراءة المحرك (037) للاعب نفسه — بلا نبضات. غيابها = لا محرك بعد. */
+  runtime?: RuntimeKnowledgeInput | null;
 }
 
 /** نفس قاعدة البحث وملف القضية: اكتشافي أو مشترك — لا المحجوب ولا غير المفحوص. */
@@ -95,34 +118,67 @@ export function buildAuthorizedKnowledge(input: AuthorizedInput): AuthorizedKnow
   const policy: RestrictedEvidencePolicy = input.restrictedEvidence === 'title' ? 'title' : 'hidden';
   const facts: AuthorizedFact[] = [];
   const readableCodes: string[] = [];
+  const teamReadable = new Set(input.teamReadableEvidence ?? []);
+  // دليل يظهر بعنوانه لكل عضو (سياسة title)، أو بمحتواه لكل عضو (مسار مشترك).
+  const evidenceTeam = (code: string): TeamVisibility => (teamReadable.has(code) ? 'full' : policy === 'title' ? 'title' : 'none');
 
   for (const e of input.evidence) {
     const visibility = evidenceVisibility(e, policy);
     if (!visibility) continue; // مخفي: لا يترك أي أثر
     if (visibility === 'readable') {
       readableCodes.push(e.code);
-      facts.push({ id: `evidence:${e.code}`, kind: 'evidence', visibility, title: e.title, text: e.body, clock: e.clock_label, ownerSpec: null });
+      facts.push({ id: `evidence:${e.code}`, kind: 'evidence', visibility, title: e.title, text: e.body, clock: e.clock_label, ownerSpec: null, team: evidenceTeam(e.code) });
     } else {
       // نفس سطح اللاعب بالضبط: evidence_index يعطيه العنوان والوقت والتخصص — بلا نص.
-      facts.push({ id: `evidence:${e.code}`, kind: 'evidence', visibility, title: e.title, text: null, clock: e.clock_label, ownerSpec: e.owner_spec });
+      facts.push({ id: `evidence:${e.code}`, kind: 'evidence', visibility, title: e.title, text: null, clock: e.clock_label, ownerSpec: e.owner_spec, team: 'title' });
     }
   }
 
   const knownObjects = input.objects.filter(objectKnown);
+  const byCode = new Map(input.objects.map((o) => [o.code, o]));
+  // معرفة فريق فقط إن كان العنصر وكل أسلافه مشتركين (عنصر مشترك تحت سلف
+  // خاص بي ليس معرفة فريق). سلف مفقود/حلقة/عمق → لا (مغلق عند الشك).
+  const teamShared = (o: ObjectRow): boolean => {
+    let cur: ObjectRow | undefined = o;
+    for (let d = 0; cur; d += 1) {
+      if (d > 8 || !cur.is_shared || !cur.discovered) return false;
+      if (!cur.parent_code) return true;
+      cur = byCode.get(cur.parent_code);
+    }
+    return false;
+  };
   for (const o of knownObjects) {
-    facts.push({ id: `object:${o.code}`, kind: 'object', visibility: 'readable', title: o.title, text: o.description || '', clock: null, ownerSpec: null });
+    facts.push({ id: `object:${o.code}`, kind: 'object', visibility: 'readable', title: o.title, text: o.description || '', clock: null, ownerSpec: null, team: teamShared(o) ? 'full' : 'none' });
   }
 
   const names = new Map(input.subjects.map((s) => [s.code, s.name]));
   for (const l of input.log) {
     if (l.speaker !== 'character') continue;
-    facts.push({ id: `statement:${l.id}`, kind: 'statement', visibility: 'readable', title: names.get(l.character_code) ?? 'إفادة', text: l.content, clock: null, ownerSpec: null });
+    // المحضر مرئي لكل الأعضاء (RLS 008).
+    facts.push({ id: `statement:${l.id}`, kind: 'statement', visibility: 'readable', title: names.get(l.character_code) ?? 'إفادة', text: l.content, clock: null, ownerSpec: null, team: 'full' });
   }
 
   // معرّف استشهاد ترتيبي — لا يكشف اسم القاعدة المكتوبة.
   input.validatedConnections.forEach((c, i) => {
-    facts.push({ id: `connection:${i + 1}`, kind: 'connection', visibility: 'readable', title: 'رابط مثبت', text: c.meaning, clock: null, ownerSpec: null });
+    facts.push({ id: `connection:${i + 1}`, kind: 'connection', visibility: 'readable', title: 'رابط مثبت', text: c.meaning, clock: null, ownerSpec: null, team: 'full' });
   });
+
+  // المحرك (037): ما رجع لهذا اللاعب من runtime_state فقط. لا نبضات.
+  if (input.runtime) {
+    for (const l of input.runtime.leads) {
+      if (!l.shared && !l.mine) continue; // لا يُفترض وصوله — مغلق عند الشك
+      facts.push({ id: `lead:${l.code}`, kind: 'lead', visibility: 'readable', title: 'خيط تحقيق', text: l.label, clock: null, ownerSpec: null, team: l.shared ? 'full' : 'none' });
+    }
+    for (const w of input.runtime.world) {
+      facts.push({ id: `world:${w.code}`, kind: 'world_state', visibility: 'readable', title: 'تطور بالقضية', text: w.headline, clock: null, ownerSpec: null, team: 'full' });
+    }
+    const objectIds = new Set(knownObjects.map((o) => o.code));
+    for (const p of input.runtime.places) {
+      if (objectIds.has(p.code)) continue; // ظاهر أصلاً كعنصر (بتصنيف فريقه الصحيح) — لا تكرار
+      // بلا سلسلة أسلاف هنا لإثبات أنه مشترك بالكامل → ليس معرفة فريق (مغلق عند الشك)
+      facts.push({ id: `place:${p.code}`, kind: 'place', visibility: 'readable', title: p.title, text: '', clock: null, ownerSpec: null, team: 'none' });
+    }
+  }
 
   // الكيانات: من مواد هذا اللاعب المصرّح بها فقط — لا من معرفة زميل.
   const entities: EntityView[] = [];
@@ -139,7 +195,8 @@ export function buildAuthorizedKnowledge(input: AuthorizedInput): AuthorizedKnow
     }
   }
   for (const en of entities) {
-    facts.push({ id: `entity:${en.handle}`, kind: 'entity', visibility: 'readable', title: en.label, text: en.descriptors.join(' · '), clock: null, ownerSpec: null });
+    // الأوصاف المكتسبة تُحسب لكل لاعب من مواده هو — ليست معرفة فريق.
+    facts.push({ id: `entity:${en.handle}`, kind: 'entity', visibility: 'readable', title: en.label, text: en.descriptors.join(' · '), clock: null, ownerSpec: null, team: 'none' });
   }
 
   const checkable: CheckableRule[] = [
@@ -200,6 +257,10 @@ export interface AuthorizedKnowledgeSource {
   entities(caseId: string, sessionId: string): { authored: readonly AuthoredEntity[]; handleOf: (id: string) => string } | null;
   tools(sessionId: string): Promise<string[]>;
   challengeCodes(sessionId: string): Promise<string[]>;
+  /** أكواد مقروءة لكل عضو (من صفوف اللاعب نفسه + توزيع القضية بالسيرفر). */
+  teamReadableEvidence?(caseId: string, evidence: readonly EvidenceRow[]): readonly string[];
+  /** قراءة المحرك (037) للاعب — null قبل تطبيقه أو عند تعطيله بعقد القضية. */
+  runtime?(sessionId: string, caseId: string): Promise<RuntimeKnowledgeInput | null>;
 }
 
 /** يبني المعرفة المصرّح بها لجلسة — العضوية أولاً، وإلا خطأ ولا بيانات. */
@@ -211,7 +272,7 @@ export async function loadAuthorizedKnowledge(
   if (!(await source.isMember(sessionId))) throw new Error('NOT_A_MEMBER');
   const caseId = await source.caseIdOf(sessionId);
   if (!caseId) throw new Error('NOT_A_MEMBER');
-  const [evidence, objects, subjects, log, validatedConnections, interrogationLayers, tools, challengeCodes] = await Promise.all([
+  const [evidence, objects, subjects, log, validatedConnections, interrogationLayers, tools, challengeCodes, runtime] = await Promise.all([
     source.evidenceIndex(sessionId),
     source.objectIndex(sessionId),
     source.subjects(sessionId),
@@ -220,6 +281,7 @@ export async function loadAuthorizedKnowledge(
     source.interrogationLayers(sessionId),
     source.tools(sessionId),
     source.challengeCodes(sessionId),
+    source.runtime ? source.runtime(sessionId, caseId) : Promise.resolve(null),
   ]);
   return buildAuthorizedKnowledge({
     caseId,
@@ -234,5 +296,7 @@ export async function loadAuthorizedKnowledge(
     tools,
     challengeCodes,
     connectionsEnabled: opts.connectionsEnabled,
+    teamReadableEvidence: source.teamReadableEvidence?.(caseId, evidence) ?? [],
+    runtime,
   });
 }

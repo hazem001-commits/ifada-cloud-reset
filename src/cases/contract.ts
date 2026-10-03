@@ -78,6 +78,22 @@ export interface CaseAiCapabilities {
   hearingChallenger: boolean;
 }
 
+/**
+ * قدرات Investigation Runtime (sql/037) — بيانات وصفية للمحرك المشترك،
+ * لا محتوى. القواعد الحية في case_runtime_rules بقاعدة البيانات فقط.
+ *   engine     — القضية تستخدم المحرك (قراءة الحالة، تسوية، معرفة الذكاء).
+ *   pulse      — عرض نبضات الفريق.
+ *   gatedPlaces — القضية قد تملك أماكن/عناصر مغلقة تُكشف باللعب.
+ * بلا قواعد معتمدة يبقى المحرك خاملاً تماماً حتى لو engine = true.
+ */
+export interface CaseRuntimeCapabilities {
+  engine: boolean;
+  pulse: boolean;
+  gatedPlaces: boolean;
+}
+
+export const NO_RUNTIME: CaseRuntimeCapabilities = { engine: false, pulse: false, gatedPlaces: false };
+
 export interface CaseContract {
   id: CaseId;
   identity: {
@@ -96,6 +112,7 @@ export interface CaseContract {
   restrictedEvidence: RestrictedEvidencePolicy;
   systems: CaseSystems;
   ai: CaseAiCapabilities;
+  runtime: CaseRuntimeCapabilities;
 }
 
 export const NO_SYSTEMS: CaseSystems = {

@@ -33,4 +33,7 @@ export const ROOM_714_CONTRACT: CaseContract = {
     intentRouter: true,
     boundedInterrogation: true,
   },
+  // البنية جاهزة (sql/037 قيد المراجعة). لا قواعد معتمدة لغرفة 714 بعد —
+  // المحرك خامل حتى تُعتمد قواعدها (RESET-2/4)، والمسار الحالي لا يتغير.
+  runtime: { engine: true, pulse: true, gatedPlaces: true },
 };

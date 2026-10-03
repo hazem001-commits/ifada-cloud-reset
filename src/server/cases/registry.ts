@@ -52,3 +52,19 @@ export function readablePrivateEvidence(
   const laned = new Set(channels.flatMap((c) => c.evidence));
   return rows.filter((r) => r.readable && laned.has(r.code)).map((r) => r.code);
 }
+
+/**
+ * أدلة يقرؤها كل عضو بتوزيع القضية (أساس TeamKnowledge): فقط بنود المسار
+ * المشترك المكتوبة صراحةً لقضية قنوات، ومن صفوف اللاعب المقروءة نفسها.
+ * قضية تخصصات (غرفة 714) → [] — صاحب التخصص وحده يقرأ، والفريق يرى
+ * العنوان فقط. مجهولة → []. مغلق عند الشك.
+ */
+export function teamReadableEvidence(
+  caseId: string | null | undefined,
+  rows: readonly { code: string; readable: boolean }[],
+): string[] {
+  const mod = getCaseServerModule(caseId);
+  if (!mod?.channels) return [];
+  const shared = new Set(mod.sharedEvidence);
+  return rows.filter((r) => r.readable && shared.has(r.code)).map((r) => r.code);
+}
