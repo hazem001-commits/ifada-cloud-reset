@@ -1,0 +1,327 @@
+/* ============================================================
+   dossier.module.css
+   طاولة الفحص لمواد العناصر التحقيقية. الأثر بالمركز تحت ضوء
+   المصباح (خلفية evidence-workstation-body نفسها)، والسياق بشريط
+   جانبي هادئ. كل نوع بشكله.
+   ============================================================ */
+
+.room {
+  --brass: #b39b72;
+  --clinic: #8fb0b3;
+  --phosphor: #93b39d;
+  --paper-warm: #e3ddcd;
+  --paper-cool: #dfe4e2;
+
+  height: 100%;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 2rem;
+  padding: clamp(1.25rem, 4vw, 3rem) clamp(1rem, 4vw, 3rem) 3rem;
+}
+
+@media (min-width: 1024px) {
+  .room {
+    grid-template-columns: minmax(0, 1fr) 19rem;
+    align-items: start;
+    gap: 3rem;
+  }
+}
+
+.stage {
+  display: grid;
+  justify-items: center;
+  animation: artifactIn 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@keyframes artifactIn {
+  from { opacity: 0; transform: translateY(1.25rem) rotate(-0.6deg); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ---------- الشريط الجانبي ---------- */
+.rail {
+  display: grid;
+  gap: 1.25rem;
+  align-content: start;
+  padding-inline-start: 1.25rem;
+  border-inline-start: 1px solid rgba(255, 255, 255, 0.07);
+  animation: railIn 0.4s 0.12s ease both;
+}
+
+@keyframes railIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (min-width: 1024px) {
+  .rail {
+    position: sticky;
+    top: 0;
+  }
+}
+
+.railBlock {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.railLabel {
+  font-size: var(--t-xs);
+  color: var(--steel);
+  letter-spacing: 0.02em;
+}
+
+.railValue {
+  margin: 0;
+  font-size: var(--t-sm);
+  line-height: 1.7;
+}
+
+.railActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding-top: 0.25rem;
+}
+
+.railHint {
+  margin: 0;
+  font-size: var(--t-xs);
+  line-height: 1.7;
+  color: var(--paper-dim);
+}
+
+/* ---------- دليل مادي: بطاقة عيّنة على صينية ---------- */
+.tray {
+  position: relative;
+  width: min(100%, 40rem);
+  padding: clamp(2rem, 6vw, 4rem) clamp(1.25rem, 5vw, 3.5rem) 4.5rem;
+  background:
+    radial-gradient(ellipse 60% 55% at 50% 40%, rgba(179, 155, 114, 0.14), transparent 72%),
+    linear-gradient(180deg, #161b20 0%, #0d1115 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 2rem 4rem rgba(0, 0, 0, 0.55),
+    0 2rem 4rem rgba(0, 0, 0, 0.45);
+}
+
+.specimen {
+  position: relative;
+  display: grid;
+  gap: 0.75rem;
+  padding: 1.6rem 1.8rem 1.8rem 2rem;
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.018) 0 1px, transparent 1px 3px),
+    var(--paper-warm);
+  color: #23211b;
+  transform: rotate(-1.4deg);
+  box-shadow: 0 1.2rem 2.4rem rgba(0, 0, 0, 0.55);
+  clip-path: polygon(0 0, calc(100% - 1.4rem) 0, 100% 1.4rem, 100% 100%, 0 100%);
+}
+
+.specimenHole {
+  position: absolute;
+  top: 1rem;
+  inset-inline-end: 1rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  background: #12171b;
+  box-shadow: 0 0 0 2px rgba(35, 33, 27, 0.35);
+}
+
+.specimenKind {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--seal);
+}
+
+.specimenTitle {
+  font-size: var(--t-xl);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.specimenBody {
+  display: grid;
+  gap: 0.35rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(35, 33, 27, 0.16);
+  line-height: 1.85;
+}
+
+.specimenBody p {
+  margin: 0;
+  max-width: none;
+}
+
+.scale {
+  position: absolute;
+  inset-inline: 10%;
+  bottom: 1.6rem;
+  height: 0.7rem;
+  background:
+    repeating-linear-gradient(90deg, rgba(217, 212, 199, 0.55) 0 1px, transparent 1px 36px) bottom / 100% 100% no-repeat,
+    repeating-linear-gradient(90deg, rgba(217, 212, 199, 0.3) 0 1px, transparent 1px 7.2px) bottom / 100% 50% no-repeat;
+  border-bottom: 1px solid rgba(217, 212, 199, 0.4);
+  opacity: 0.7;
+}
+
+/* ---------- نتيجة مخبرية: تقرير سريري ---------- */
+.labReport {
+  width: min(100%, 42rem);
+  display: grid;
+  gap: 1.1rem;
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  background: var(--paper-cool);
+  color: #1b2224;
+  border-top: 4px solid var(--clinic);
+  box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.5);
+}
+
+.labHead {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: #3b5256;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(27, 34, 36, 0.14);
+}
+
+.labRing {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  border: 2px solid var(--clinic);
+}
+
+.labPending {
+  margin-inline-start: auto;
+  color: #8a5a17;
+}
+
+.labTitle {
+  font-size: var(--t-xl);
+  font-weight: 600;
+}
+
+.labResultBox {
+  display: grid;
+  gap: 0.4rem;
+  padding: 1.1rem 1.25rem;
+  background: rgba(143, 176, 179, 0.14);
+  border-inline-start: 3px solid var(--clinic);
+  line-height: 1.85;
+}
+
+.labResultBox p {
+  margin: 0;
+  max-width: none;
+}
+
+.labResultLabel {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: #3b5256;
+}
+
+/* ---------- مادة رقمية: شاشة طرفية ---------- */
+.terminal {
+  width: min(100%, 46rem);
+  background: #07090b;
+  border: 1px solid #1c2429;
+  box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.55);
+}
+
+.termBar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.65rem 1rem;
+  font-size: var(--t-xs);
+  color: var(--phosphor);
+  background: #0b0f12;
+  border-bottom: 1px solid #1c2429;
+}
+
+.termDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  background: var(--phosphor);
+}
+
+.termTitle {
+  margin-inline-start: auto;
+  color: #6f8a77;
+}
+
+.termLines {
+  list-style: none;
+  margin: 0;
+  padding: 1.25rem 1.25rem 1.75rem;
+  display: grid;
+  gap: 0.45rem;
+  color: #c3d0c6;
+  line-height: 1.8;
+  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 3px);
+}
+
+.termLines li {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.lineNo {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  color: #3f5046;
+  direction: ltr;
+}
+
+/* ---------- وثيقة / سجل: نفس ورق العارض ---------- */
+.paper {
+  width: min(100%, 44rem);
+  display: grid;
+  gap: 1rem;
+}
+
+.recordBand {
+  margin: calc(-1 * clamp(1.25rem, 4vw, 2.5rem)) calc(-1 * clamp(1.25rem, 4vw, 2.5rem)) 0;
+  padding: 0.55rem clamp(1.25rem, 4vw, 2.5rem);
+  background: #2a2922;
+  color: var(--paper-warm);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.paperTitle {
+  font-size: var(--t-xl);
+  font-weight: 600;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid rgba(35, 33, 27, 0.18);
+}
+
+.paperBody {
+  display: grid;
+  gap: 0.4rem;
+  line-height: 1.9;
+}
+
+.paperBody p {
+  margin: 0;
+  max-width: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage,
+  .rail {
+    animation: none !important;
+  }
+}

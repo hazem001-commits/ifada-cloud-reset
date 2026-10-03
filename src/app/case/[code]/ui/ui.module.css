@@ -1,0 +1,166 @@
+/* ============================================================
+   src/app/case/[code]/ui/ui.module.css
+   أساس الواجهة المشترك لأسطح التحقيق: رأس السطح، وحالات
+   التحميل/الفراغ/عدم الإتاحة/الخطأ. لغة واحدة لكل الأسطح.
+   ============================================================ */
+
+/* ---------- رأس السطح: أين أنا، وبأي نمط تحقيق ---------- */
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem clamp(1rem, 3vw, 1.75rem) 0.75rem;
+  border-bottom: 1px solid var(--line-soft);
+  background: linear-gradient(to bottom, rgba(12, 17, 22, 0.92), rgba(12, 17, 22, 0.78));
+}
+
+.headText {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: var(--brass);
+  text-transform: uppercase;
+}
+
+.title {
+  font-size: var(--t-lg);
+  font-weight: 600;
+  color: var(--ivory);
+  line-height: 1.25;
+}
+
+.lede {
+  font-size: var(--t-sm);
+  color: var(--ivory-dim);
+  max-width: 52ch;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* ---------- حالات السطح ---------- */
+.state {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+  padding: 1.25rem clamp(1rem, 3vw, 1.75rem);
+  color: var(--ivory-dim);
+  font-size: var(--t-sm);
+  line-height: 1.7;
+  animation: stateIn var(--dur-base) var(--ease-out) both;
+}
+
+.state[data-variant='empty'] {
+  border-inline-start: 2px solid var(--line-strong);
+}
+
+.state[data-variant='unavailable'] {
+  border-inline-start: 2px solid var(--st-teammate);
+}
+
+.state[data-variant='error'] {
+  border-inline-start: 2px solid var(--seal);
+  color: var(--ivory);
+}
+
+.stateTitle {
+  color: var(--ivory);
+  font-weight: 600;
+  font-size: var(--t-base);
+}
+
+.pulse {
+  inline-size: 2.5rem;
+  block-size: 2px;
+  background: linear-gradient(90deg, transparent, var(--brass), transparent);
+  background-size: 200% 100%;
+  animation: sweep 1.4s var(--ease-inout) infinite;
+}
+
+/* ---------- زر أداة هادئ مشترك ---------- */
+.tool {
+  appearance: none;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ivory);
+  font: inherit;
+  font-size: var(--t-sm);
+  min-block-size: 2.75rem; /* 44px — هدف لمس آمن */
+  padding: 0.4rem 0.85rem;
+  border-radius: 2px;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.tool:hover {
+  border-color: var(--brass);
+}
+
+.tool:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}
+
+.tool[data-primary='true'] {
+  border-color: var(--brass);
+  background: rgba(179, 146, 99, 0.12);
+}
+
+.tool:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@keyframes stateIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sweep {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .state {
+    animation: none;
+  }
+  .pulse {
+    animation: none;
+    background: var(--brass);
+    opacity: 0.6;
+  }
+  .tool {
+    transition: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

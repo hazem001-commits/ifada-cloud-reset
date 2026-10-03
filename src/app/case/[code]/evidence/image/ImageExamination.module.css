@@ -1,0 +1,619 @@
+/* ============================================================
+   ImageExamination.module.css
+   محطة فحص الصور: شاشة مراقبة (surveillance) أو طاولة ضوء (photo).
+   كل التأثيرات طبقات فوق الصورة — ولا فلتر على الصورة نفسها.
+   ============================================================ */
+
+/* ---------- الهيكل ---------- */
+.workstation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+@media (min-width: 960px) {
+  .workstation {
+    grid-template-rows: none;
+    grid-template-columns: minmax(15rem, 17rem) minmax(0, 1fr);
+  }
+}
+
+.stageWrap {
+  position: relative;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  padding: 0.75rem 0.75rem 5rem;
+}
+
+@media (min-width: 640px) {
+  .stage {
+    padding: 2rem 2.5rem 5.75rem;
+  }
+}
+
+/* شاشة الموبايل العمودية: الإطار ياخد نسبة الصورة نفسها ويتوسّط،
+   بدل شاشة طويلة فاضية فوق وتحت لقطة أفقية. */
+@media (max-width: 639px) {
+  .stage {
+    align-items: flex-start;
+    padding-top: 1rem;
+  }
+
+  .monitor,
+  .lightTable {
+    flex: 1 1 auto;
+    max-height: 100%;
+  }
+
+  .monitor .viewport,
+  .lightTable .viewport {
+    flex: none;
+    width: 100%;
+    aspect-ratio: var(--media-aspect, 16 / 9);
+    max-height: 100%;
+  }
+}
+
+/* ---------- شاشة المراقبة ---------- */
+.monitor {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0.55rem 0.55rem 0;
+  background: linear-gradient(180deg, #1a1f24 0%, #111519 55%, #0d1013 100%);
+  border: 1px solid #262d33;
+  border-radius: 6px;
+  box-shadow:
+    0 1.8rem 3.5rem rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+  animation: monitorOn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@media (min-width: 640px) {
+  .monitor {
+    padding: 0.9rem 0.9rem 0;
+  }
+}
+
+.monitor .viewport {
+  border-radius: 3px;
+  background: #020403;
+  box-shadow:
+    inset 0 0 2.5rem rgba(0, 0, 0, 0.9),
+    0 0 0 1px #05080a,
+    0 0 1.6rem rgba(120, 200, 150, 0.05);
+}
+
+.bezelStrip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2.1rem;
+  padding-inline: 0.35rem;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  white-space: nowrap;
+  overflow: hidden;
+  letter-spacing: 0.22em;
+  color: #7f8b94;
+  direction: ltr;
+}
+
+.bezelLed {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: #58c27a;
+  box-shadow: 0 0 6px rgba(88, 194, 122, 0.7);
+}
+
+/* ---------- طاولة الضوء (صور عادية) ---------- */
+.lightTable {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  padding: 0.5rem;
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 45%, rgba(226, 214, 186, 0.12), transparent 70%),
+    rgba(8, 10, 12, 0.55);
+  border: 1px solid rgba(226, 214, 186, 0.1);
+  border-radius: 4px;
+  animation: tableSettle 0.45s ease-out both;
+}
+
+/* هامش حول الصورة عند الملاءمة حتى علامات القصّ تضل ظاهرة */
+.lightTable .viewport {
+  padding: 1.5rem;
+}
+
+/* ---------- سطح الصورة ---------- */
+.viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.viewport[data-zoomed] {
+  cursor: grab;
+}
+
+.viewport[data-dragging][data-zoomed] {
+  cursor: grabbing;
+}
+
+.viewport[data-lens] {
+  cursor: crosshair;
+}
+
+.plate {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  opacity: 0;
+  will-change: transform;
+}
+
+.plate[data-visible] {
+  opacity: 1;
+  animation: imageResolve 0.42s ease-out both;
+}
+
+.image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.lightTable .plate[data-visible] {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 1.2rem 2.4rem rgba(0, 0, 0, 0.55);
+}
+
+/* علامات قصّ في الزوايا — إطار عرض فقط */
+.cropMarks {
+  position: absolute;
+  inset: -0.7rem;
+  pointer-events: none;
+  --m: rgba(226, 214, 186, 0.55);
+  background:
+    linear-gradient(var(--m), var(--m)) top left / 1rem 1px no-repeat,
+    linear-gradient(var(--m), var(--m)) top left / 1px 1rem no-repeat,
+    linear-gradient(var(--m), var(--m)) top right / 1rem 1px no-repeat,
+    linear-gradient(var(--m), var(--m)) top right / 1px 1rem no-repeat,
+    linear-gradient(var(--m), var(--m)) bottom left / 1rem 1px no-repeat,
+    linear-gradient(var(--m), var(--m)) bottom left / 1px 1rem no-repeat,
+    linear-gradient(var(--m), var(--m)) bottom right / 1rem 1px no-repeat,
+    linear-gradient(var(--m), var(--m)) bottom right / 1px 1rem no-repeat;
+}
+
+/* ---------- تأثيرات الشاشة (طبقة فوق الصورة فقط) ---------- */
+.screenFx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.16) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse 85% 80% at 50% 50%, transparent 60%, rgba(0, 0, 0, 0.3) 100%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.035), transparent 40%);
+}
+
+/* حبيبات ثابتة خفيفة جداً — بدون وميض ولا "glitch" */
+.screenFx::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.07;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+.bezelCode,
+.bezelClock,
+.hudStill {
+  color: #a9dcb4;
+  text-shadow: 0 0 6px rgba(120, 210, 150, 0.35);
+  letter-spacing: 0.14em;
+}
+
+.bezelCode {
+  padding-inline-start: 0.6rem;
+  margin-inline-start: 0.2rem;
+  border-inline-start: 1px solid #2a3238;
+}
+
+.bezelSpacer {
+  flex: 1;
+}
+
+.hudStill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.hudStill::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  background: currentColor;
+  opacity: 0.85;
+}
+
+/* ---------- حالات الاسترجاع ---------- */
+.screenState {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  text-align: center;
+  font-size: var(--t-sm);
+  color: var(--paper-dim);
+}
+
+.monitor .screenState p {
+  font-family: var(--mono);
+  color: #a9dcb4;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 6px rgba(120, 210, 150, 0.3);
+}
+
+.screenState[role='alert'] p,
+.monitor .screenState[role='alert'] p {
+  color: #e2a197;
+  text-shadow: none;
+}
+
+.stateScan {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(120, 210, 150, 0.45), transparent);
+  animation: stateScan 1.8s ease-in-out infinite;
+}
+
+.lightTable .stateScan {
+  background: linear-gradient(90deg, transparent, rgba(226, 214, 186, 0.4), transparent);
+}
+
+.stateRetry {
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--paper);
+  border-radius: 2px;
+  padding: 0.6rem 1.2rem;
+  cursor: pointer;
+}
+
+/* ---------- عدسة الفحص ---------- */
+.lens {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid rgba(226, 214, 186, 0.6);
+  box-shadow:
+    0 0 0 4px rgba(8, 10, 12, 0.75),
+    0 0.8rem 2rem rgba(0, 0, 0, 0.6);
+  transition: opacity 0.12s ease;
+}
+
+.lensCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.lensLabel {
+  position: absolute;
+  bottom: 0.55rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  color: var(--paper);
+  background: rgba(8, 10, 12, 0.7);
+  padding: 0.05rem 0.35rem;
+  border-radius: 2px;
+  direction: ltr;
+}
+
+/* ---------- بطاقة البيانات ---------- */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1rem;
+  padding: 0.55rem 1rem;
+  background: rgba(10, 14, 18, 0.72);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: var(--t-xs);
+}
+
+.metaTag,
+.metaDesktop {
+  display: none !important;
+}
+
+.metaList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0;
+}
+
+.metaList > div {
+  display: flex;
+  gap: 0.35rem;
+  align-items: baseline;
+}
+
+.metaList dt {
+  color: var(--paper-dim);
+}
+
+.metaList dd {
+  margin: 0;
+  color: var(--paper);
+}
+
+@media (min-width: 960px) {
+  .meta {
+    display: block;
+    padding: 2rem 1.5rem;
+    border-bottom: 0;
+    border-inline-end: 1px solid rgba(255, 255, 255, 0.06);
+    background: linear-gradient(180deg, rgba(10, 14, 18, 0.82), rgba(10, 14, 18, 0.6));
+    overflow-y: auto;
+    font-size: var(--t-sm);
+  }
+
+  .metaTag {
+    position: relative;
+    display: grid !important;
+    gap: 0.2rem;
+    width: fit-content;
+    min-width: 9.5rem;
+    padding: 0.9rem 1.1rem 0.8rem 2.2rem;
+    margin-bottom: 1.75rem;
+    background: linear-gradient(180deg, #e3ddcf, #d3ccbb);
+    color: #1d1c18;
+    border-radius: 2px 10px 10px 2px;
+    box-shadow: 0 0.6rem 1.2rem rgba(0, 0, 0, 0.45);
+    transform: rotate(-2deg);
+    direction: ltr;
+  }
+
+  .metaTagHole {
+    position: absolute;
+    left: 0.7rem;
+    top: 50%;
+    width: 0.65rem;
+    height: 0.65rem;
+    margin-top: -0.325rem;
+    border-radius: 50%;
+    background: var(--ink);
+    box-shadow: 0 0 0 2px #b8b09d;
+  }
+
+  .metaTagCode {
+    font-family: var(--mono);
+    font-size: var(--t-lg);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+  }
+
+  .metaTagClass {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.16em;
+    color: var(--seal);
+  }
+
+  .metaList {
+    display: grid;
+    gap: 0.55rem;
+  }
+
+  .metaList > div {
+    display: grid;
+    gap: 0.15rem;
+    padding-top: 0.55rem;
+    border-top: 1px dashed rgba(233, 225, 207, 0.1);
+  }
+
+  .metaList dt {
+    font-size: var(--t-xs);
+    letter-spacing: 0.06em;
+  }
+
+  .metaList dd[dir='ltr'] {
+    text-align: right;
+  }
+
+  .metaDesktop {
+    display: grid !important;
+  }
+}
+
+/* ---------- أدوات الفحص ---------- */
+.toolbar {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: calc(100% - 1rem);
+  padding: 0.3rem;
+  background: rgba(9, 12, 16, 0.9);
+  border: 1px solid var(--ink-line);
+  border-radius: 3px;
+  box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.toolGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.toolGroup + .toolGroup {
+  padding-inline-start: 0.25rem;
+  border-inline-start: 1px solid var(--ink-line);
+}
+
+.tool {
+  display: inline-grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  color: var(--paper);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.toolText {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.04em;
+  direction: ltr;
+}
+
+.tool:hover:not(:disabled) {
+  background: var(--ink-raised);
+  border-color: var(--ink-line);
+}
+
+.tool[aria-pressed='true'] {
+  color: var(--signal);
+  border-color: rgba(224, 163, 62, 0.45);
+  background: rgba(224, 163, 62, 0.08);
+}
+
+.tool:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.zoomReadout {
+  min-width: 3.4rem;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.08em;
+  color: var(--paper-dim);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+@media (max-width: 420px) {
+  .zoomReadout {
+    min-width: 2.9rem;
+  }
+
+  .bezelLabel {
+    display: none;
+  }
+
+  .bezelCode {
+    padding-inline-start: 0;
+    margin-inline-start: 0;
+    border-inline-start: 0;
+  }
+
+  .tool {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+}
+
+.mono {
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+}
+
+/* ---------- الحركة ---------- */
+@keyframes monitorOn {
+  0%   { opacity: 0; transform: translateY(1.5rem) scale(0.985); }
+  100% { opacity: 1; transform: none; }
+}
+
+@keyframes tableSettle {
+  from { opacity: 0; transform: translateY(1rem); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* "تشغيل الشاشة": الصورة تنفتح من خط أفقي رفيع — مرة واحدة، قصيرة */
+.monitor .plate[data-visible] {
+  animation: screenPowerOn 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes screenPowerOn {
+  0%   { opacity: 0; clip-path: inset(49.5% 0 49.5% 0); filter: brightness(2.2); }
+  55%  { opacity: 1; clip-path: inset(0 0 0 0); filter: brightness(1.35); }
+  100% { opacity: 1; clip-path: inset(0 0 0 0); filter: none; }
+}
+
+@keyframes imageResolve {
+  from { opacity: 0; filter: blur(6px); }
+  to   { opacity: 1; filter: none; }
+}
+
+@keyframes stateScan {
+  0%   { top: 0; opacity: 0; }
+  15%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .monitor,
+  .lightTable,
+  .plate[data-visible],
+  .monitor .plate[data-visible],
+  .stateScan {
+    animation: none !important;
+  }
+
+  .lens {
+    transition: none;
+  }
+}

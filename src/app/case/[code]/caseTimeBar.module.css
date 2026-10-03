@@ -1,0 +1,103 @@
+/* ============================================================
+   caseTimeBar.module.css — وقت القضية + الفرص المؤقتة.
+   سطر رفيع هادئ بفحم دافئ، لا صناديق تحذير. الوقت ثانوي بصرياً
+   للمحتوى التحقيقي؛ الإلحاح يشتد فقط قرب الإغلاق الفعلي.
+   ============================================================ */
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 1.25rem;
+  min-height: 2.1rem;
+  padding: 0.3rem clamp(1rem, 2.4vw, 1.75rem);
+  background: #0e0d0b;
+  border-bottom: 1px solid rgba(179, 146, 99, 0.1);
+  font-size: var(--t-xs);
+  color: var(--ivory-dim);
+}
+
+.clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.clock svg {
+  color: var(--brass);
+}
+
+.time,
+.num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.time {
+  color: var(--ivory);
+  letter-spacing: 0.04em;
+}
+
+.opportunities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.opportunity {
+  --tone: var(--brass);
+
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding-inline-start: 0.6rem;
+  border-inline-start: 2px solid var(--tone);
+  cursor: default;
+  transition: border-color var(--dur-base) var(--ease-out);
+}
+
+.opportunity[data-urgency='soon'] { --tone: var(--copper); }
+.opportunity[data-urgency='critical'] { --tone: #d8695c; }
+.opportunity[data-urgency='closed'] { --tone: rgba(236, 227, 207, 0.2); }
+
+.kind {
+  color: var(--tone);
+  font-weight: 600;
+}
+
+.opportunity[data-urgency='closed'] .kind {
+  color: var(--ivory-dim);
+}
+
+.title {
+  color: var(--ivory);
+}
+
+.opportunity[data-urgency='closed'] .title {
+  color: var(--ivory-dim);
+}
+
+.remaining {
+  color: var(--ivory-dim);
+}
+
+.opportunity[data-urgency='critical'] .remaining {
+  color: #e2a197;
+}
+
+.more {
+  color: var(--ivory-dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .opportunity {
+    transition: none;
+  }
+}

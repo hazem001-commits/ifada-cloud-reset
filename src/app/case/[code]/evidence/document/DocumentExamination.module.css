@@ -1,0 +1,578 @@
+/* ============================================================
+   DocumentExamination.module.css
+   طاولة فحص الوثائق: ملف مانيلا تحت الورقة، ورقة بظل حقيقي،
+   أختام، بطاقة دليل جانبية، وأدوات فحص عائمة. يمتد من هوية
+   "الأرشيف الأمني البارد" بـ globals.css، ما بيستبدلها.
+   ============================================================ */
+
+/* ---------- الهيكل ---------- */
+.workstation {
+  display: grid;
+  /* عمود صريح minmax(0,1fr) — بدونه العمود بيكبر لعرض المحتوى
+     (الورقة المكبّرة) وسطح الفحص بيطلع أعرض من الشاشة. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+@media (min-width: 960px) {
+  .workstation {
+    grid-template-rows: none;
+    grid-template-columns: minmax(15rem, 17rem) minmax(0, 1fr);
+  }
+}
+
+.stageWrap {
+  position: relative;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* سطح الطاولة القابل للتمرير. اتجاه ltr فقط لأصل التمرير —
+   محتوى الـ canvas ما إله اتجاه نصي. */
+.stage {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  overflow-anchor: none;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #2c363f transparent;
+  direction: ltr;
+  padding: 4.25rem 1rem 5.75rem;
+  /* الورقة تذوب بالطاولة خلف أدوات الفحص بدل ما تنقطع تحتها */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 5.5rem), transparent calc(100% - 0.75rem));
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 5.5rem), transparent calc(100% - 0.75rem));
+}
+
+@media (min-width: 640px) {
+  .stage {
+    padding: 5rem 3rem 6.5rem;
+  }
+}
+
+.stage:focus-visible {
+  outline-offset: -3px;
+}
+
+.desk {
+  display: flex;
+  align-items: flex-start;
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+/* ---------- الملف + الورقة ---------- */
+.sheetFrame {
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  margin: 0 auto;
+  direction: rtl;
+  /* ميلان الملف — أقل على الموبايل حتى زواياه ما تطلع برا الشاشة */
+  --folder-rot: -0.8deg;
+  animation: fileArrive 0.72s cubic-bezier(0.16, 0.84, 0.3, 1) both;
+}
+
+@media (min-width: 640px) {
+  .sheetFrame {
+    --folder-rot: -1.4deg;
+  }
+}
+
+/* ملف مانيلا تحت الورقة، بلسان علوي */
+.sheetFrame::before {
+  content: '';
+  position: absolute;
+  z-index: -2;
+  inset: -3.8rem -0.4rem -1.1rem -0.4rem;
+  background:
+    linear-gradient(#b39b72, #a88f66) top 0 right 1.25rem / 6.5rem 1.35rem no-repeat,
+    linear-gradient(172deg, #b8a27a 0%, #a58c63 55%, #97805a 100%) 0 1.2rem / 100% calc(100% - 1.2rem) no-repeat;
+  border-radius: 3px;
+  box-shadow:
+    0 2.2rem 3.5rem rgba(0, 0, 0, 0.6),
+    0 0.3rem 0.8rem rgba(0, 0, 0, 0.45);
+  transform: rotate(var(--folder-rot));
+  animation: folderSettle 0.9s cubic-bezier(0.16, 0.84, 0.3, 1) both;
+}
+
+@media (min-width: 640px) {
+  .sheetFrame::before {
+    inset: -4.3rem -1.6rem -1.8rem -1.6rem;
+  }
+}
+
+/* ورقة ثانية ظاهرة تحت الأولى — للوثائق متعددة الصفحات */
+.sheetFrame[data-stacked]::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: #cdc6b5;
+  box-shadow: 0 0.6rem 1.2rem rgba(0, 0, 0, 0.35);
+  transform: translate(7px, 9px) rotate(1.1deg);
+}
+
+.sheet {
+  position: relative;
+  box-shadow:
+    0 1.4rem 2.6rem rgba(0, 0, 0, 0.5),
+    0 0.2rem 0.5rem rgba(0, 0, 0, 0.35);
+  animation: shadowSettle 0.9s ease-out both;
+}
+
+.pdfSheet {
+  background: #f1ede3;
+  animation: sheetTurn 0.26s ease-out both;
+}
+
+/* حبيبات ورق خفيفة + حواف معتّقة فوق الصفحة — ما بتأثر على القراءة */
+.pdfSheet::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(90, 70, 40, 0.035) 0 1px, transparent 1.5px) 0 0 / 5px 5px,
+    radial-gradient(circle at 70% 60%, rgba(90, 70, 40, 0.03) 0 1px, transparent 1.5px) 0 0 / 7px 7px;
+  box-shadow:
+    inset 0 0 0 1px rgba(60, 45, 20, 0.12),
+    inset 0 0 2.5rem rgba(120, 95, 50, 0.1);
+  mix-blend-mode: multiply;
+}
+
+.pageSurface {
+  position: relative;
+}
+
+.pageHost,
+.pageCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------- ورقة نصية (دليل بدون وسائط) ---------- */
+.textSheet {
+  width: min(44rem, calc(100vw - 2rem));
+  padding: clamp(1.5rem, 5vw, 3rem);
+  color: #22211c;
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.018) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse at 50% 0%, #e6e1d4, #d7d1c2 80%);
+  animation: sheetTurn 0.3s ease-out both;
+}
+
+.textHeader {
+  display: grid;
+  gap: 0.35rem;
+  padding-bottom: 1rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid rgba(60, 50, 30, 0.25);
+}
+
+.textHeader h3 {
+  font-size: var(--t-lg);
+}
+
+.textBody {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: var(--sans);
+  font-size: var(--t-base);
+  line-height: 1.95;
+}
+
+.textEmpty {
+  color: #5a5546;
+  font-size: var(--t-sm);
+}
+
+.sheetImage {
+  display: block;
+  max-width: 100%;
+  border-radius: 2px;
+}
+
+/* ---------- حالات الأرشيف ---------- */
+.stateSheet {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1rem;
+  width: min(30rem, calc(100vw - 2rem));
+  aspect-ratio: 1 / 1.3;
+  padding: 2rem;
+  overflow: hidden;
+  background: linear-gradient(180deg, #d6d0c1, #c9c2b1);
+  color: #3a372e;
+}
+
+.stateScan {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(163, 53, 41, 0.55), transparent);
+  animation: archiveScan 1.8s ease-in-out infinite;
+}
+
+.stateText {
+  font-size: var(--t-sm);
+  text-align: center;
+  max-width: 22ch;
+}
+
+.stateSheetError .stateText {
+  color: #7d261d;
+  font-weight: 500;
+}
+
+.stateRetry {
+  font: inherit;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--paper);
+  background: #1b2229;
+  border: 1px solid #1b2229;
+  border-radius: 2px;
+  padding: 0.6rem 1.2rem;
+  cursor: pointer;
+}
+
+/* ---------- الأختام: على الملف فوق حافة الورقة ---------- */
+.stamps {
+  position: absolute;
+  z-index: 2;
+  top: -2.45rem;
+  inset-inline-end: 0.25rem;
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  pointer-events: none;
+}
+
+@media (min-width: 640px) {
+  .stamps {
+    top: -2.85rem;
+  }
+}
+
+.stampCode,
+.stampClass {
+  background: transparent;
+  mix-blend-mode: multiply;
+}
+
+.stampCode {
+  font-size: var(--t-sm);
+  animation-delay: 0.5s !important;
+}
+
+.stampClass {
+  font-size: var(--t-xs);
+  animation-delay: 0.64s !important;
+}
+
+/* ---------- بطاقة البيانات الجانبية ---------- */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1rem;
+  padding: 0.55rem 1rem;
+  background: rgba(10, 14, 18, 0.72);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: var(--t-xs);
+}
+
+.metaTag {
+  display: none;
+}
+
+.metaList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0;
+}
+
+.metaList > div {
+  display: flex;
+  gap: 0.35rem;
+  align-items: baseline;
+}
+
+.metaList dt {
+  color: var(--paper-dim);
+}
+
+.metaList dd {
+  margin: 0;
+  color: var(--paper);
+}
+
+.metaWide,
+.metaCode {
+  display: none !important;
+}
+
+@media (min-width: 960px) {
+  .meta {
+    display: block;
+    padding: 2rem 1.5rem;
+    border-bottom: 0;
+    border-inline-end: 1px solid rgba(255, 255, 255, 0.06);
+    background: linear-gradient(180deg, rgba(10, 14, 18, 0.82), rgba(10, 14, 18, 0.6));
+    overflow-y: auto;
+    font-size: var(--t-sm);
+  }
+
+  .metaTag {
+    position: relative;
+    display: grid;
+    gap: 0.2rem;
+    width: fit-content;
+    min-width: 9.5rem;
+    padding: 0.9rem 1.1rem 0.8rem 2.2rem;
+    margin-bottom: 1.75rem;
+    background: linear-gradient(180deg, #e3ddcf, #d3ccbb);
+    color: #1d1c18;
+    border-radius: 2px 10px 10px 2px;
+    box-shadow: 0 0.6rem 1.2rem rgba(0, 0, 0, 0.45);
+    transform: rotate(-2deg);
+    direction: ltr;
+  }
+
+  .metaTagHole {
+    position: absolute;
+    left: 0.7rem;
+    top: 50%;
+    width: 0.65rem;
+    height: 0.65rem;
+    margin-top: -0.325rem;
+    border-radius: 50%;
+    background: var(--ink);
+    box-shadow: 0 0 0 2px #b8b09d;
+  }
+
+  .metaTagCode {
+    font-family: var(--mono);
+    font-size: var(--t-lg);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+  }
+
+  .metaTagClass {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.16em;
+    color: var(--seal);
+  }
+
+  /* سجل استلام أدلة، مش لوحة خصائص */
+  .metaList {
+    display: grid;
+    gap: 0.55rem;
+  }
+
+  .metaList > div {
+    display: grid;
+    gap: 0.15rem;
+    padding-top: 0.55rem;
+    border-top: 1px dashed rgba(233, 225, 207, 0.1);
+  }
+
+  .metaList dt {
+    font-size: var(--t-xs);
+    letter-spacing: 0.06em;
+  }
+
+  .metaWide,
+  .metaCode {
+    display: grid !important;
+  }
+
+  /* التكبير ظاهر أصلاً بأدوات الفحص على الديسكتوب */
+  .metaZoom {
+    display: none !important;
+  }
+}
+
+/* ---------- أدوات الفحص ---------- */
+.toolbar {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: calc(100% - 1rem);
+  padding: 0.3rem;
+  background: rgba(9, 12, 16, 0.9);
+  border: 1px solid var(--ink-line);
+  border-radius: 3px;
+  box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.toolGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.toolGroup + .toolGroup {
+  padding-inline-start: 0.25rem;
+  border-inline-start: 1px solid var(--ink-line);
+}
+
+.tool {
+  display: inline-grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  color: var(--paper);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.tool:hover:not(:disabled) {
+  background: var(--ink-raised);
+  border-color: var(--ink-line);
+}
+
+.tool:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.pageCounter,
+.zoomReadout {
+  font-size: var(--t-xs);
+  color: var(--paper-dim);
+  white-space: nowrap;
+}
+
+.zoomReadout,
+.pageNumbers {
+  font-family: var(--mono);
+  letter-spacing: 0.08em;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.pageCounter {
+  padding: 0 0.4rem;
+}
+
+.pageCounterVisual {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.pageCounter strong {
+  color: var(--paper);
+  font-weight: 500;
+}
+
+.zoomReadout {
+  min-width: 3.25rem;
+  text-align: center;
+}
+
+@media (max-width: 420px) {
+  .zoomReadout,
+  .pageWord {
+    display: none;
+  }
+
+  .pageCounter {
+    padding: 0 0.15rem;
+  }
+
+  .tool {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+}
+
+/* ---------- مساعدات ---------- */
+.mono {
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- الحركة ---------- */
+@keyframes fileArrive {
+  0%   { opacity: 0; transform: translateY(42vh) rotate(-3.5deg); }
+  70%  { opacity: 1; transform: translateY(-4px) rotate(0.3deg); }
+  100% { opacity: 1; transform: none; }
+}
+
+@keyframes folderSettle {
+  0%   { transform: rotate(-4deg); }
+  100% { transform: rotate(var(--folder-rot)); }
+}
+
+@keyframes shadowSettle {
+  0% {
+    box-shadow:
+      0 4rem 5rem rgba(0, 0, 0, 0.25),
+      0 1rem 1.5rem rgba(0, 0, 0, 0.2);
+  }
+}
+
+@keyframes sheetTurn {
+  from { opacity: 0.35; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes archiveScan {
+  0%   { transform: translateY(0); opacity: 0; }
+  15%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translateY(calc(30rem * 1.3)); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheetFrame,
+  .sheetFrame::before,
+  .sheet,
+  .pdfSheet,
+  .textSheet,
+  .stateScan {
+    animation: none !important;
+  }
+
+  .stampCode,
+  .stampClass {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+}

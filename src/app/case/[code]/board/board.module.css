@@ -1,0 +1,758 @@
+/* ============================================================
+   src/app/case/[code]/board/board.module.css
+   لوحة التحقيق V2 — سطح مادي مشترك، لا لوحة إدارة ولا مخطط عقد.
+   المواد تحتفظ بهويتها (ورق، صورة، شريط، شاشة، أثر، مكان)، وأفكار
+   الفريق مكتوبة بيد اللاعبين وتبدو كذلك. الخيوط لغة وظيفية:
+     مؤقت (متقطع، خافت) · إسناد (رفيع، نقطة) · توتر (نقطي، كهرماني)
+     · مثبت (صلب، نحاسي، "يستقر"). كل حالة لها نمط خط + نص — لا لون فقط.
+   ============================================================ */
+
+.board {
+  --board-bg: #0f1418;
+  --lift: 0 14px 28px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.5);
+  --rest: 0 2px 0 rgba(0, 0, 0, 0.55), 0 6px 14px rgba(0, 0, 0, 0.28);
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-block-size: calc(100dvh - 7rem);
+  background: var(--board-bg);
+  color: var(--ivory);
+}
+
+/* ---------- شريط الروابط المثبتة (حقيقة الفريق من السيرفر) ---------- */
+.ledger {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding: 0.45rem clamp(1rem, 3vw, 1.75rem);
+  border-bottom: 1px solid var(--line-soft);
+  font-size: var(--t-sm);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.ledgerLabel {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  color: var(--brass);
+  white-space: nowrap;
+}
+
+.ledgerItem {
+  white-space: nowrap;
+  padding-inline-start: 0.75rem;
+  border-inline-start: 2px solid var(--brass);
+  color: var(--ivory);
+}
+
+/* ---------- الربط المشترك (شريط هادئ، لا نافذة) ---------- */
+.joint {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.55rem clamp(1rem, 3vw, 1.75rem);
+  border-bottom: 1px solid var(--line-soft);
+  background: linear-gradient(90deg, rgba(199, 160, 92, 0.05), transparent 70%);
+  font-size: var(--t-sm);
+}
+
+.joint:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: -2px;
+}
+
+.jointRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.jointList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-inline-size: 0;
+}
+
+.jointChip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.6rem;
+  align-items: center;
+  max-inline-size: 100%;
+  padding: 0.3rem 0.65rem;
+  border: 1px dashed var(--line-strong);
+  border-inline-start: 2px solid var(--brass);
+  color: var(--ivory);
+}
+
+.jointChip[data-mine='true'] {
+  border-style: solid;
+}
+
+.jointTitle {
+  overflow-wrap: anywhere;
+}
+
+.jointBy {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--ivory-dim);
+}
+
+.jointActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* ---------- السطح ---------- */
+.workspace {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-block-size: 0;
+}
+
+.stage {
+  position: relative;
+  min-block-size: 68vh;
+  overflow: hidden;
+  touch-action: none;
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(236, 227, 207, 0.035), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.012) 0 1px, transparent 1px 28px),
+    var(--board-bg);
+}
+
+.stage:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: -2px;
+}
+
+/* ممرات القضية (مثل المشهد 17): أشرطة مكانية بعنوانها */
+.lanes {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  pointer-events: none;
+}
+
+.lane {
+  border-inline-start: 1px dashed var(--line-strong);
+  padding: 0.6rem 0.8rem;
+}
+
+.lane:first-child {
+  border-inline-start: 0;
+}
+
+.laneLabel {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  color: var(--ivory-dim);
+  opacity: 0.75;
+}
+
+/* ---------- الخيوط ---------- */
+.threads {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.thread {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+
+.thread[data-kind='tentative'] {
+  stroke: var(--ivory-dim);
+  stroke-width: 1.25;
+  stroke-dasharray: 6 5;
+  opacity: 0.55;
+}
+
+.thread[data-kind='support'] {
+  stroke: var(--st-shared);
+  stroke-width: 1.25;
+  opacity: 0.8;
+}
+
+.thread[data-kind='tension'] {
+  stroke: var(--signal);
+  stroke-width: 1.5;
+  stroke-dasharray: 1.5 4;
+  stroke-linecap: round;
+  opacity: 0.9;
+}
+
+.thread[data-validated='true'] {
+  stroke: var(--brass);
+  stroke-width: 2.25;
+  stroke-dasharray: none;
+  opacity: 1;
+  animation: settle var(--dur-reveal) var(--ease-emph) both;
+}
+
+.thread[data-dim='true'] {
+  opacity: 0.08;
+}
+
+/* ---------- المواد ---------- */
+.item {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  inline-size: 12.5rem;
+  max-inline-size: 42vw;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  outline: none;
+  transition:
+    box-shadow var(--dur-fast) var(--ease-out),
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+  box-shadow: var(--rest);
+  animation: arrive var(--dur-slow) var(--ease-out) both;
+}
+
+.item[data-lifted='true'] {
+  cursor: grabbing;
+  box-shadow: var(--lift);
+  transform: translate(-50%, -50%) scale(1.025);
+  z-index: 5;
+}
+
+.item[data-selected='true'] {
+  box-shadow: var(--rest), 0 0 0 2px var(--brass);
+}
+
+.item:focus-visible {
+  box-shadow: var(--rest), 0 0 0 2px var(--ivory);
+}
+
+.item[data-dim='true'] {
+  opacity: 0.16;
+}
+
+.kicker {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+
+.itemTitle {
+  display: block;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  line-height: 1.45;
+  margin-block-start: 0.25rem;
+}
+
+.itemNote {
+  display: block;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  margin-block-start: 0.3rem;
+  opacity: 0.75;
+}
+
+/* ورق: وثيقة / سجل / إفادة */
+.paper {
+  background: #d9d4c7;
+  color: #1b1d1f;
+  padding: 0.6rem 0.75rem 0.7rem;
+  border-top: 3px solid #b9b19e;
+}
+
+/* صورة / مراقبة: إطار مظلم بلقطة حقيقية مقصوصة إن وُجدت */
+.photo {
+  background: #0a0c0e;
+  color: var(--ivory);
+  padding: 0.4rem 0.4rem 0.55rem;
+  border: 1px solid #2a3138;
+}
+
+.thumb {
+  display: block;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background: #15191d;
+  margin-block-end: 0.4rem;
+}
+
+.thumbImage {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  filter: saturate(0.85) contrast(1.05);
+}
+
+.thumbFallback {
+  display: grid;
+  place-content: center;
+  block-size: 100%;
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  color: var(--ivory-dim);
+}
+
+/* شريط صوتي: هوية الوسيط (ليست بيانات موجة حقيقية) */
+.tape {
+  background: #1a1714;
+  color: var(--ivory);
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #3a322a;
+}
+
+.tapeReel {
+  display: block;
+  block-size: 0.55rem;
+  margin-block: 0.35rem 0.1rem;
+  background: repeating-linear-gradient(90deg, rgba(179, 146, 99, 0.55) 0 2px, transparent 2px 5px);
+  opacity: 0.6;
+}
+
+/* شاشة: مادة رقمية / جهاز */
+.screen {
+  background: #0d1a1f;
+  color: #cfe3e6;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #1f3a42;
+  box-shadow: inset 0 0 0 1px rgba(136, 185, 168, 0.08);
+}
+
+/* أثر مادي / نتيجة مخبر: بطاقة أثر */
+.tag {
+  background: #cdbf9f;
+  color: #1d1a14;
+  padding: 0.55rem 0.75rem 0.65rem 0.75rem;
+  clip-path: polygon(0 0, 88% 0, 100% 18%, 100% 100%, 0 100%);
+}
+
+/* مكان */
+.place {
+  background: transparent;
+  color: var(--ivory);
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--brass);
+  box-shadow: none;
+}
+
+/* دليل محجوب بعنوانه فقط (قاعدة منتج غرفة 714) */
+.item[data-access='restricted'] .itemTitle::after {
+  content: ' · محجوب';
+  font-weight: 400;
+  opacity: 0.6;
+}
+
+/* ---------- أفكار الفريق (ليست حقيقة قضية) ---------- */
+.reason {
+  background: #141b22;
+  color: var(--ivory);
+  padding: 0.6rem 0.75rem 0.7rem;
+  border: 1px solid var(--line-strong);
+}
+
+.reason[data-kind='fact'] {
+  border-inline-start: 3px solid var(--st-shared);
+}
+
+.reason[data-kind='question'] {
+  border: 1px dashed var(--ivory-dim);
+}
+
+.reason[data-kind='hypothesis'] {
+  background: #191612;
+  border: 1px solid #4a3d2b;
+  border-inline-start: 3px solid var(--brass);
+}
+
+.reasonText {
+  display: block;
+  font-size: var(--t-sm);
+  line-height: 1.6;
+  margin-block-start: 0.3rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- شريط السياق للاختيار ---------- */
+.context {
+  position: absolute;
+  left: 50%;
+  inset-block-end: 1rem;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  max-inline-size: min(56rem, calc(100% - 2rem));
+  padding: 0.45rem 0.55rem;
+  background: rgba(12, 17, 22, 0.94);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--lift);
+  z-index: 10;
+  animation: rise var(--dur-base) var(--ease-out) both;
+}
+
+.contextCount {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--ivory-dim);
+  padding-inline: 0.35rem;
+}
+
+.result {
+  position: absolute;
+  inset-block-start: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  max-inline-size: min(40rem, calc(100% - 2rem));
+  padding: 0.6rem 0.9rem;
+  background: rgba(12, 17, 22, 0.96);
+  border: 1px solid var(--line-strong);
+  font-size: var(--t-sm);
+  z-index: 11;
+  animation: rise var(--dur-base) var(--ease-out) both;
+}
+
+.result[data-status='validated'] {
+  border-color: var(--brass);
+}
+
+.resultLabel {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--brass);
+  letter-spacing: 0.06em;
+}
+
+/* ---------- الدُرج الجانبي (مواد / فكرة جديدة) ---------- */
+.drawer {
+  inline-size: min(22rem, 92vw);
+  border-inline-start: 1px solid var(--line-soft);
+  background: #10161b;
+  overflow-y: auto;
+  max-block-size: calc(100dvh - 9rem);
+  animation: slide var(--dur-base) var(--ease-out) both;
+}
+
+.drawerSection {
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--line-soft);
+  display: grid;
+  gap: 0.55rem;
+}
+
+.drawerTitle {
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--ivory);
+}
+
+.drawerHint {
+  font-size: 0.75rem;
+  color: var(--ivory-dim);
+  line-height: 1.6;
+}
+
+.trayRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--t-sm);
+}
+
+.trayTitle {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trayActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.segment {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.textarea {
+  inline-size: 100%;
+  min-block-size: 6rem;
+  resize: vertical;
+  background: var(--ink);
+  color: var(--ivory);
+  border: 1px solid var(--line-strong);
+  font: inherit;
+  font-size: var(--t-sm);
+  padding: 0.55rem 0.65rem;
+  line-height: 1.6;
+}
+
+.textarea:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 1px;
+}
+
+/* ---------- ورقة الفرضية / هامش التحليل ---------- */
+.sheet {
+  inline-size: min(26rem, 94vw);
+  border-inline-start: 1px solid #3a3226;
+  background: #14110d;
+  overflow-y: auto;
+  max-block-size: calc(100dvh - 9rem);
+  animation: slide var(--dur-base) var(--ease-out) both;
+}
+
+.sheetHead {
+  padding: 1rem 1.1rem 0.8rem;
+  border-bottom: 1px solid #2c261d;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.sheetHypothesis {
+  font-size: var(--t-base);
+  line-height: 1.65;
+  color: var(--ivory);
+}
+
+.sheetNote {
+  font-size: 0.72rem;
+  color: var(--ivory-dim);
+  line-height: 1.6;
+}
+
+.analysis {
+  padding: 0.6rem 1.1rem 1.1rem;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.analysisGroup {
+  display: grid;
+  gap: 0.4rem;
+  animation: stateIn var(--dur-base) var(--ease-out) both;
+}
+
+.analysisTitle {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  color: var(--brass);
+}
+
+.analysisGroup[data-tone='against'] .analysisTitle {
+  color: var(--signal);
+}
+
+.analysisItem {
+  font-size: var(--t-sm);
+  line-height: 1.65;
+  padding-inline-start: 0.7rem;
+  border-inline-start: 1px solid #3a3226;
+}
+
+.cite {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 0.72rem;
+  color: var(--st-shared);
+  text-decoration: underline dotted;
+  cursor: pointer;
+  margin-inline-start: 0.35rem;
+}
+
+.cite:focus-visible {
+  outline: 2px solid var(--brass);
+}
+
+/* ---------- أثر المصدر ---------- */
+.trace {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  font-size: 0.75rem;
+}
+
+.traceStep {
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--line-strong);
+}
+
+.traceArrow {
+  opacity: 0.5;
+}
+
+/* ---------- قائمة الشاشات الصغيرة ---------- */
+.stack {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem 6.5rem;
+  align-content: start;
+}
+
+.stackGroup {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  color: var(--ivory-dim);
+  margin-block-start: 0.4rem;
+}
+
+.stack .item {
+  position: relative;
+  transform: none;
+  inline-size: 100%;
+  max-inline-size: none;
+  cursor: pointer;
+  animation: none;
+}
+
+.stack .item[data-lifted='true'] {
+  transform: none;
+}
+
+.stack .context {
+  position: fixed;
+  inset-inline: 0.5rem;
+  inset-block-end: 0.5rem;
+  transform: none;
+  max-inline-size: none;
+}
+
+.srOnly {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -46%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+@keyframes settle {
+  0% {
+    stroke-width: 1.25;
+    opacity: 0.55;
+  }
+  60% {
+    stroke-width: 3;
+  }
+  100% {
+    stroke-width: 2.25;
+    opacity: 1;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes slide {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes stateIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item,
+  .context,
+  .result,
+  .drawer,
+  .sheet,
+  .analysisGroup,
+  .thread[data-validated='true'] {
+    animation: none;
+  }
+  .item,
+  .item[data-lifted='true'],
+  .thread {
+    transition: none;
+  }
+  .item[data-lifted='true'] {
+    transform: translate(-50%, -50%);
+  }
+}
+
+@media (max-width: 760px) {
+  /* على الهاتف كل علاقة مكتوبة بالكلمات ("مرتبط به") — المفتاح البصري زائد */
+  .legend {
+    display: none;
+  }
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .drawer,
+  .sheet {
+    position: fixed;
+    inset: auto 0 0 0;
+    inline-size: auto;
+    max-block-size: 78dvh;
+    border-inline-start: 0;
+    border-top: 1px solid var(--line-strong);
+    z-index: 20;
+  }
+}

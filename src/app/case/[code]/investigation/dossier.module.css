@@ -1,0 +1,559 @@
+/* ============================================================
+   dossier.module.css — ملف الفحص السياقي.
+   فحم دافئ، هرمية نص مقيّدة، خط نقل نحاسي، وحافة سرّية هادئة.
+   يدخل من بداية السطر (اليمين) والغرفة تبقى ظاهرة بجانبه.
+   الهرمية: موقع (مسار) ← جسم (عنوان) ← ملاحظة ← حالة ← إجراء.
+   ============================================================ */
+
+.dossier {
+  --tone: var(--ivory-dim);
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  color: var(--ivory);
+  background:
+    linear-gradient(180deg, rgba(179, 146, 99, 0.05), transparent 22rem),
+    rgba(17, 16, 14, 0.95);
+  border-inline-end: 1px solid rgba(179, 146, 99, 0.2);
+  box-shadow: -1.5rem 0 3rem rgba(0, 0, 0, 0.38);
+  animation: dossierIn 480ms 120ms var(--ease-expo) backwards;
+}
+
+/* RTL: يدخل من اليمين نحو الغرفة */
+@keyframes dossierIn {
+  from {
+    opacity: 0;
+    translate: 1.75rem 0;
+  }
+}
+
+[data-layout='sheet'] > .dossier {
+  border-inline-end: 0;
+  border-top: 1px solid rgba(179, 146, 99, 0.2);
+  box-shadow: 0 -1.5rem 3rem rgba(0, 0, 0, 0.38);
+  animation-name: sheetIn;
+}
+
+@keyframes sheetIn {
+  from {
+    opacity: 0;
+    translate: 0 1.75rem;
+  }
+}
+
+.scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  align-content: start;
+  gap: 1.35rem;
+  padding: 1.1rem clamp(1.25rem, 2vw, 1.75rem) 2rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(236, 227, 207, 0.16) transparent;
+}
+
+/* ---------- مسار: الموقع / الأصل ---------- */
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--ivory-dim);
+}
+
+.back,
+.crumbLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.25rem;
+  padding: 0 0.5rem;
+  background: none;
+  border: 0;
+  color: var(--ivory-dim);
+  font: inherit;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.back {
+  margin-inline-start: -0.5rem;
+}
+
+.back:hover,
+.crumbLink:hover {
+  color: var(--ivory);
+}
+
+.back:focus-visible,
+.crumbLink:focus-visible {
+  outline: 2px solid var(--ivory);
+  outline-offset: 1px;
+}
+
+/* السهم يشير لبداية السطر — "رجوع" بواجهة عربية */
+.back svg {
+  color: var(--brass);
+  transition: translate var(--dur-fast) var(--ease-out);
+}
+
+.back:hover svg {
+  translate: 2px 0;
+}
+
+.crumbSep {
+  color: rgba(236, 227, 207, 0.22);
+}
+
+/* ---------- العنوان والحالة ---------- */
+.head {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--brass);
+}
+
+.title {
+  font-size: clamp(1.45rem, 1.8vw, 1.8rem);
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--ivory);
+}
+
+/* عنوان يستلم التركيز برمجياً فقط (للقارئ) — ليس عنصراً تفاعلياً */
+.title:focus {
+  outline: none;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: fit-content;
+  margin: 0.1rem 0 0;
+  font-size: 0.82rem;
+  color: var(--tone);
+}
+
+.status[data-tone='idle'] { --tone: var(--ivory-dim); }
+.status[data-tone='private'] { --tone: #bfc4d6; }
+.status[data-tone='teammate'] { --tone: #c9ae78; }
+.status[data-tone='shared'] { --tone: #a2c2b5; }
+.status[data-tone='processing'] { --tone: var(--brass); }
+.status[data-tone='ready'] { --tone: var(--ivory); }
+
+/* ---------- الملاحظة: ما نعرفه فعلاً ---------- */
+.observation {
+  margin: 0;
+  padding-inline-start: 0.9rem;
+  border-inline-start: 1px solid rgba(236, 227, 207, 0.2);
+  font-size: 1rem;
+  line-height: 1.9;
+  color: rgba(236, 227, 207, 0.93);
+  white-space: pre-wrap;
+  animation: reveal 620ms var(--ease-expo) backwards;
+}
+
+.observationMuted {
+  font-size: 0.92rem;
+  color: var(--ivory-dim);
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* حجب: المعلومة موجودة لكنها ليست لك بعد (لغة الحجب الأساسية بالهوية) */
+.redacted {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.9rem 1rem;
+  border: 1px dashed rgba(201, 174, 120, 0.35);
+  font-size: 0.9rem;
+  color: var(--ivory-dim);
+}
+
+.redacted p {
+  margin: 0;
+}
+
+.redactedBars {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.redactedBars span {
+  display: block;
+  height: 0.55rem;
+  background: rgba(236, 227, 207, 0.14);
+}
+
+.redactedBars span:nth-child(2) { width: 82%; }
+.redactedBars span:nth-child(3) { width: 58%; }
+
+/* ---------- معالجة بالخلفية / نتيجة جاهزة ---------- */
+.processing {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.9rem 0;
+  border-block: 1px solid rgba(179, 146, 99, 0.2);
+}
+
+.processingTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--brass);
+}
+
+.processingText {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.75;
+  color: var(--ivory-dim);
+}
+
+/* تقدّم غير محدد: حركة ثابتة، بلا نسبة وهمية */
+.progress {
+  position: relative;
+  height: 1px;
+  overflow: hidden;
+  background: rgba(179, 146, 99, 0.2);
+}
+
+.progress::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  width: 32%;
+  background: var(--brass);
+  animation: travel 1.8s linear infinite;
+}
+
+/* RTL: التقدّم يسير من بداية السطر (يمين) لنهايته */
+@keyframes travel {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(-320%); }
+}
+
+.ready {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: fit-content;
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--ivory);
+  animation: resultIn 700ms var(--ease-expo) backwards;
+}
+
+@keyframes resultIn {
+  from {
+    opacity: 0;
+    translate: 0 0.35rem;
+  }
+}
+
+/* ---------- قرار المشاركة ---------- */
+.share {
+  position: relative;
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem 1.05rem 1.1rem;
+  background: linear-gradient(160deg, rgba(191, 196, 214, 0.06), transparent 65%);
+  border: 1px solid rgba(191, 196, 214, 0.14);
+  animation: resultIn 520ms 140ms var(--ease-expo) backwards;
+}
+
+.shareHead {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #c9cddd;
+}
+
+.shareHead[data-phase='delivered'] {
+  color: #a2c2b5;
+}
+
+.shareText {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.75;
+  color: var(--ivory-dim);
+}
+
+.shareBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  width: fit-content;
+  min-height: 2.75rem;
+  margin-top: 0.2rem;
+  padding: 0 1.15rem;
+  background: rgba(179, 146, 99, 0.06);
+  border: 1px solid rgba(179, 146, 99, 0.55);
+  color: var(--ivory);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    translate var(--dur-press) var(--ease-out);
+}
+
+.shareBtn svg {
+  color: var(--brass);
+}
+
+.shareBtn:hover:not(:disabled) {
+  background: rgba(179, 146, 99, 0.14);
+  border-color: var(--brass);
+}
+
+.shareBtn:active:not(:disabled) {
+  translate: 0 1px;
+}
+
+.shareBtn:focus-visible {
+  outline: 2px solid var(--ivory);
+  outline-offset: 3px;
+}
+
+.shareBtn:disabled {
+  cursor: progress;
+  opacity: 0.85;
+}
+
+/* خط النقل: ساكن ← يسري أثناء الطلب الحقيقي ← يكتمل عند تأكيد السيرفر */
+.transmission {
+  position: relative;
+  display: block;
+  height: 1px;
+  overflow: hidden;
+  background: rgba(179, 146, 99, 0.16);
+}
+
+.transmission::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  width: 0;
+  background: var(--brass);
+}
+
+.transmission[data-phase='sending']::after {
+  width: 30%;
+  animation: travel 1.2s var(--ease-inout) infinite;
+}
+
+.transmission[data-phase='delivered'] {
+  background: rgba(162, 194, 181, 0.18);
+}
+
+.transmission[data-phase='delivered']::after {
+  width: 100%;
+  background: linear-gradient(270deg, var(--brass), #a2c2b5);
+  animation: resolve 560ms var(--ease-expo) backwards;
+}
+
+@keyframes resolve {
+  from {
+    width: 30%;
+    opacity: 0.6;
+  }
+}
+
+.sharedLine {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: fit-content;
+  margin: 0;
+  font-size: 0.82rem;
+  color: #a2c2b5;
+  animation: resultIn 420ms var(--ease-power2) backwards;
+}
+
+/* ---------- أقسام ---------- */
+.section {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.sectionLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--ivory-dim);
+}
+
+.sectionLabel::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(236, 227, 207, 0.08);
+}
+
+/* اكتشافات فرعية: أسطر، لا بطاقات */
+.kids {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 2.9rem;
+  padding: 0 0.15rem;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid rgba(236, 227, 207, 0.07);
+  color: var(--ivory);
+  font: inherit;
+  font-size: 0.92rem;
+  text-align: start;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.kid:hover {
+  background: rgba(236, 227, 207, 0.03);
+}
+
+.kid:focus-visible {
+  outline: 2px solid var(--ivory);
+  outline-offset: -2px;
+}
+
+.kidTitle {
+  font-weight: 500;
+}
+
+.kidMeta {
+  font-size: 0.76rem;
+  color: var(--ivory-dim);
+}
+
+.kidMeta[data-tone='processing'] { color: var(--brass); }
+.kidMeta[data-tone='ready'] { color: var(--ivory); }
+
+.kidGo {
+  color: var(--brass);
+  transition: translate var(--dur-fast) var(--ease-out);
+}
+
+.kid:hover .kidGo {
+  translate: -3px 0;
+}
+
+.tools {
+  display: grid;
+  gap: 1.1rem;
+}
+
+/* ---------- تسليم هادئ: ليس خطأ ---------- */
+.handoff {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.85rem 1rem;
+  background: rgba(236, 227, 207, 0.025);
+  border-inline-start: 2px solid rgba(147, 161, 171, 0.45);
+}
+
+.handoffTitle {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--ivory);
+}
+
+.handoffText {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.75;
+  color: var(--ivory-dim);
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(236, 227, 207, 0.07);
+}
+
+/* حافة سرّية: خط رفيع جداً على طرف الملف المواجه للغرفة — لا شارة، لا لون إنذار */
+.confidentialEdge {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: -1px;
+  width: 1px;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(191, 196, 214, 0.55) 30%, rgba(191, 196, 214, 0.55) 70%, transparent);
+  animation: resultIn 600ms 300ms var(--ease-power2) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dossier,
+  .observation,
+  .ready,
+  .share,
+  .sharedLine,
+  .confidentialEdge,
+  .progress::after,
+  .transmission[data-phase='sending']::after,
+  .transmission[data-phase='delivered']::after {
+    animation: none !important;
+  }
+
+  .progress::after,
+  .transmission[data-phase='sending']::after {
+    width: 100%;
+    opacity: 0.55;
+  }
+
+  .back svg,
+  .kidGo,
+  .shareBtn {
+    transition: none;
+  }
+}

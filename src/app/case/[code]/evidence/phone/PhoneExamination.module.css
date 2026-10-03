@@ -1,0 +1,406 @@
+/* ============================================================
+   PhoneExamination.module.css
+   محطة فحص الجهاز المستردّ: هيكل جهاز محايد حول لقطة الشاشة
+   (بدون علامة تجارية/نوتش/أيقونات حالة). الشاشة زواياها قائمة عمداً
+   — أي تدوير كان رح يقص بكسلات من زوايا اللقطة الأصلية.
+   ============================================================ */
+
+.workstation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+@media (min-width: 960px) {
+  .workstation {
+    grid-template-rows: none;
+    grid-template-columns: minmax(15rem, 17rem) minmax(0, 1fr);
+  }
+}
+
+.stage {
+  position: relative;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0.9rem 0.75rem 0;
+  background: radial-gradient(ellipse 55% 60% at 50% 42%, rgba(160, 175, 190, 0.07), transparent 70%);
+}
+
+@media (min-width: 640px) {
+  .stage {
+    padding: 1.75rem 2rem 0;
+  }
+}
+
+/* ---------- الجهاز ---------- */
+.captureBlock {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+}
+
+.captureNote {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+  /* نص عربي: خط عادي بدون تباعد (المونو والتباعد بيقطّعوا الوصل) */
+  font-size: 0.75rem;
+  letter-spacing: 0;
+  color: #9aa5ad;
+}
+
+.captureNoteDims {
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+}
+
+.captureNoteSep {
+  color: #5f6a72;
+}
+
+.device {
+  flex: 1;
+  min-height: 0;
+  max-width: 100%;
+  display: flex;
+  padding: 0.35rem;
+  background: linear-gradient(160deg, #22282e 0%, #15191d 45%, #0e1114 100%);
+  border: 1px solid #2c343b;
+  border-radius: 0.9rem;
+  box-shadow:
+    0 2rem 4rem rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+  animation: deviceSettle 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@media (min-width: 640px) {
+  .device {
+    padding: 0.75rem;
+    border-radius: 1.9rem;
+  }
+}
+
+.screen {
+  position: relative;
+  height: 100%;
+  max-width: 100%;
+  aspect-ratio: var(--capture-aspect, 9 / 19.5);
+  /* clip (مش hidden): hidden خلّى Chrome يعيد عيّنة البكسلات عند 1:1 —
+     clip بيحافظ على البكسلات الأصلية بالضبط (تم التحقق بـ QA). */
+  overflow: clip;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  background: #030405;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px #05070a;
+}
+
+.screen:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 3px;
+}
+
+.screen[data-zoomed] {
+  cursor: grab;
+}
+
+.screen[data-zoomed][data-dragging] {
+  cursor: grabbing;
+}
+
+.screen[data-lens] {
+  cursor: crosshair;
+}
+
+.plate {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  opacity: 0;
+  will-change: transform;
+}
+
+.plate[data-visible] {
+  opacity: 1;
+  animation: captureResolve 0.4s ease-out both;
+}
+
+.capture {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ---------- حالات ---------- */
+.screenState {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1rem;
+  padding: 1.25rem;
+  text-align: center;
+  font-size: var(--t-sm);
+  color: var(--paper-dim);
+}
+
+.screenState p[data-error] {
+  color: #e2a197;
+}
+
+.stateScan {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(160, 190, 215, 0.45), transparent);
+  animation: stateScan 1.8s ease-in-out infinite;
+}
+
+.stateRetry {
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--paper);
+  border-radius: 2px;
+  padding: 0.6rem 1.2rem;
+  cursor: pointer;
+}
+
+.emptyNote {
+  align-self: center;
+  font-size: var(--t-sm);
+  color: var(--paper-dim);
+}
+
+/* ---------- سجل رسائل مبنين (بيانات حقيقية فقط) ---------- */
+.thread {
+  align-self: flex-start;
+  width: min(34rem, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background: linear-gradient(180deg, #14181c, #0e1114);
+  border: 1px solid #262d33;
+  border-radius: 6px;
+}
+
+.threadLabel {
+  font-size: var(--t-sm);
+  font-weight: 500;
+  color: var(--paper);
+  padding-bottom: 0.6rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid #262d33;
+}
+
+.threadList {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.message {
+  max-width: 85%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #2a3238;
+  border-radius: 4px;
+  background: #151a1f;
+}
+
+.message[data-direction='outgoing'] {
+  justify-self: end;
+  background: #1c2127;
+  border-color: #353e46;
+}
+
+.message[data-direction='incoming'] {
+  justify-self: start;
+}
+
+.messageMeta {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 0.2rem;
+  font-size: var(--t-xs);
+  color: #9aa5ad;
+}
+
+.messageTime {
+  font-family: var(--mono);
+}
+
+.messageText {
+  margin: 0;
+  font-size: var(--t-sm);
+  line-height: 1.8;
+  color: var(--paper);
+  white-space: pre-wrap;
+}
+
+/* ---------- بطاقة البيانات ---------- */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1rem;
+  padding: 0.55rem 1rem;
+  background: rgba(10, 14, 18, 0.72);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: var(--t-xs);
+}
+
+.metaTag,
+.metaDesktop {
+  display: none !important;
+}
+
+.metaList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0;
+}
+
+.metaList > div {
+  display: flex;
+  gap: 0.35rem;
+  align-items: baseline;
+}
+
+.metaList dt {
+  color: var(--paper-dim);
+}
+
+.metaList dd {
+  margin: 0;
+  color: var(--paper);
+}
+
+@media (min-width: 960px) {
+  .meta {
+    display: block;
+    padding: 2rem 1.5rem;
+    border-bottom: 0;
+    border-inline-end: 1px solid rgba(255, 255, 255, 0.06);
+    background: linear-gradient(180deg, rgba(10, 14, 18, 0.82), rgba(10, 14, 18, 0.6));
+    overflow-y: auto;
+    font-size: var(--t-sm);
+  }
+
+  .metaTag {
+    position: relative;
+    display: grid !important;
+    gap: 0.2rem;
+    width: fit-content;
+    min-width: 9.5rem;
+    padding: 0.9rem 1.1rem 0.8rem 2.2rem;
+    margin-bottom: 1.75rem;
+    background: linear-gradient(180deg, #e3ddcf, #d3ccbb);
+    color: #1d1c18;
+    border-radius: 2px 10px 10px 2px;
+    box-shadow: 0 0.6rem 1.2rem rgba(0, 0, 0, 0.45);
+    transform: rotate(-2deg);
+    direction: ltr;
+  }
+
+  .metaTagHole {
+    position: absolute;
+    left: 0.7rem;
+    top: 50%;
+    width: 0.65rem;
+    height: 0.65rem;
+    margin-top: -0.325rem;
+    border-radius: 50%;
+    background: var(--ink);
+    box-shadow: 0 0 0 2px #b8b09d;
+  }
+
+  .metaTagCode {
+    font-family: var(--mono);
+    font-size: var(--t-lg);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+  }
+
+  .metaTagClass {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.16em;
+    color: var(--seal);
+  }
+
+  .metaList {
+    display: grid;
+    gap: 0.55rem;
+  }
+
+  .metaList > div {
+    display: grid;
+    gap: 0.15rem;
+    padding-top: 0.55rem;
+    border-top: 1px dashed rgba(233, 225, 207, 0.1);
+  }
+
+  .metaList dt {
+    font-size: var(--t-xs);
+    letter-spacing: 0.06em;
+  }
+
+  .metaList dd[dir='ltr'] {
+    text-align: right;
+  }
+
+  .metaDesktop {
+    display: grid !important;
+  }
+}
+
+.mono {
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+}
+
+/* ---------- الحركة ---------- */
+@keyframes deviceSettle {
+  from { opacity: 0; transform: translateY(1.5rem) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes captureResolve {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes stateScan {
+  0%   { top: 0; opacity: 0; }
+  15%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .device,
+  .plate[data-visible],
+  .stateScan {
+    animation: none !important;
+  }
+}

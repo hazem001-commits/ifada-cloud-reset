@@ -1,0 +1,951 @@
+/* ============================================================
+   roomScene.module.css — الغرفة تتكلم، الواجهة تُصغي.
+   الصورة تملأ المساحة وتقود التكوين؛ الواجهة طبقة رقيقة دافئة.
+   كل ما داخل .stage بإحداثيات الصورة الأصلية (1 وحدة = 1 بكسل
+   مصدر) ويتحوّل مع الصورة. النص داخله يُعاد لمقاسه الحقيقي عبر
+   --inv (= 1 / مقياس المسرح) حتى لا يتضخم مع التكبير.
+   ============================================================ */
+
+@property --vx {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 768px;
+}
+@property --vy {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 512px;
+}
+@property --vrx {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 400px;
+}
+@property --vry {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 300px;
+}
+
+/* حاوية المحرك: تملأ ما تبقى من ارتفاع الشاشة تحت شريط القضية */
+.engine {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: #0b0a09;
+}
+
+.viewport {
+  --inv: 1;
+
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  isolation: isolate;
+  background: #0b0a09;
+  color: var(--ivory);
+}
+
+/* ---------- المسرح الفوتوغرافي ---------- */
+.photo {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.stage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+  /* الرجوع للغرفة: أسرع وأنعم من الاقتراب */
+  transition: transform 460ms var(--ease-power2);
+}
+
+.viewport[data-focus='true'] .stage {
+  /* الاقتراب: حركة كاميرا متزنة */
+  transition: transform 780ms var(--ease-inout);
+}
+
+.image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+  opacity: 0;
+  transform-origin: 50% 55%;
+  transition:
+    filter 780ms var(--ease-inout),
+    opacity 300ms linear;
+}
+
+/* لحظة الدخول الوحيدة المنسّقة: الضوء يعود للغرفة */
+.photo[data-ready='true'] .image {
+  opacity: 1;
+  animation: lightsUp 1300ms var(--ease-expo) backwards;
+}
+
+.viewport[data-focus='true'] .image {
+  filter: brightness(0.82) saturate(0.86);
+}
+
+@keyframes lightsUp {
+  from {
+    opacity: 0;
+    filter: brightness(0.25) saturate(0.5);
+    transform: scale(1.035);
+  }
+  to {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+}
+
+/* نقرة خارج الجسم المفحوص = خطوة للخلف */
+.dismiss {
+  position: absolute;
+  inset: 0;
+  cursor: zoom-out;
+}
+
+/* ---------- حجاب التركيز: الإضاءة تنحسر عن محيط الجسم ---------- */
+.veil {
+  --va: 0;
+
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    ellipse var(--vrx) var(--vry) at var(--vx) var(--vy),
+    transparent 0%,
+    transparent 42%,
+    rgba(8, 7, 6, var(--va)) 100%
+  );
+  transition:
+    opacity 320ms var(--ease-power2),
+    --vx 420ms var(--ease-power2),
+    --vy 420ms var(--ease-power2),
+    --vrx 420ms var(--ease-power2),
+    --vry 420ms var(--ease-power2);
+}
+
+.veil[data-on='hover'] {
+  --va: 0.34;
+  opacity: 1;
+}
+
+.veil[data-on='focus'] {
+  --va: 0.66;
+  opacity: 1;
+  transition-duration: 700ms;
+}
+
+/* اكتشاف خاص: التركيز أضيق وأهدأ قليلاً — بلا لون تحذير */
+.photo[data-private='true'] .veil[data-on='focus'] {
+  --va: 0.74;
+}
+
+/* إطار الجسم المفحوص: زوايا رفيعة، لا صندوق */
+.focusFrame {
+  position: absolute;
+  pointer-events: none;
+  animation: frameIn 520ms 360ms var(--ease-expo) backwards;
+}
+
+.focusFrame::before,
+.bracket {
+  --c: rgba(236, 227, 207, 0.78);
+  --len: calc(16px * var(--inv));
+  --th: calc(1.5px * var(--inv));
+
+  background:
+    linear-gradient(var(--c) 0 0) left top / var(--len) var(--th),
+    linear-gradient(var(--c) 0 0) left top / var(--th) var(--len),
+    linear-gradient(var(--c) 0 0) right top / var(--len) var(--th),
+    linear-gradient(var(--c) 0 0) right top / var(--th) var(--len),
+    linear-gradient(var(--c) 0 0) left bottom / var(--len) var(--th),
+    linear-gradient(var(--c) 0 0) left bottom / var(--th) var(--len),
+    linear-gradient(var(--c) 0 0) right bottom / var(--len) var(--th),
+    linear-gradient(var(--c) 0 0) right bottom / var(--th) var(--len);
+  background-repeat: no-repeat;
+}
+
+.focusFrame::before {
+  content: '';
+  position: absolute;
+  inset: calc(-10px * var(--inv));
+}
+
+@keyframes frameIn {
+  from {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------- نقاط الاهتمام ---------- */
+.hotspot {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: calc(6px * var(--inv));
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hotspot:focus-visible {
+  outline: calc(2px * var(--inv)) solid var(--ivory);
+  outline-offset: calc(3px * var(--inv));
+}
+
+/* لمعة: ضوء يلتقط حافة الجسم. شبه غير مرئية، ثابتة، بلا نبض */
+.glint {
+  position: absolute;
+  width: calc(18px * var(--inv));
+  height: calc(18px * var(--inv));
+  margin: calc(-9px * var(--inv)) 0 0 calc(-9px * var(--inv));
+  pointer-events: none;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 248, 232, 0.92) 0 7%,
+    rgba(255, 236, 204, 0.32) 22%,
+    transparent 60%
+  );
+  mix-blend-mode: screen;
+  opacity: 0.5;
+  transition: opacity 200ms var(--ease-power2);
+  animation: glintIn 900ms 1100ms var(--ease-power2) backwards;
+}
+
+.glint::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 230%;
+  height: calc(1px * var(--inv));
+  transform: translate(-50%, -50%);
+  background: linear-gradient(90deg, transparent, rgba(255, 240, 214, 0.5), transparent);
+}
+
+@keyframes glintIn {
+  from {
+    opacity: 0;
+  }
+}
+
+.hotspot[data-tone='teammate'] .glint {
+  opacity: 0.28;
+}
+
+.hotspot[data-tone='processing'] .glint {
+  background: radial-gradient(
+    circle,
+    rgba(236, 206, 150, 0.95) 0 7%,
+    rgba(179, 146, 99, 0.45) 24%,
+    transparent 62%
+  );
+  opacity: 0.7;
+}
+
+.hotspot[data-tone='ready'] .glint {
+  opacity: 0.85;
+  animation: catchLight 1600ms var(--ease-expo) 1;
+}
+
+@keyframes catchLight {
+  0% {
+    opacity: 0.2;
+    transform: scale(0.8);
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+  100% {
+    opacity: 0.85;
+    transform: none;
+  }
+}
+
+/* تمرير/تركيز: الجسم يتضح — زوايا + رفع ضوء دافئ خفيف */
+.bracket {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(1.04);
+  transition:
+    opacity 200ms var(--ease-power2),
+    transform 240ms var(--ease-power2);
+}
+
+.bracket::before {
+  content: '';
+  position: absolute;
+  inset: -18%;
+  background: radial-gradient(closest-side, rgba(255, 238, 210, 0.08), transparent);
+}
+
+.hotspot:hover .bracket,
+.hotspot:focus-visible .bracket {
+  opacity: 1;
+  transform: none;
+}
+
+.hotspot:hover .glint,
+.hotspot:focus-visible .glint {
+  opacity: 0;
+}
+
+/* تسمية مختصرة: تظهر فقط عند التمرير أو تركيز لوحة المفاتيح */
+.label {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  gap: 2px;
+  min-width: max-content;
+  padding: 8px 14px 9px;
+  pointer-events: none;
+  text-align: start;
+  white-space: nowrap;
+  color: var(--ivory);
+  background: rgba(15, 14, 12, 0.88);
+  border-inline-start: 2px solid var(--brass);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  translate: 0 4px;
+  transition:
+    opacity 180ms var(--ease-power2),
+    translate 220ms var(--ease-power2);
+}
+
+.label[data-place='above'] {
+  bottom: 100%;
+  margin-bottom: calc(12px * var(--inv));
+}
+
+.label[data-place='below'] {
+  top: 100%;
+  margin-top: calc(12px * var(--inv));
+  translate: 0 -4px;
+}
+
+.label[data-align='center'] {
+  left: 50%;
+  transform: translateX(-50%) scale(var(--inv));
+}
+.label[data-align='left'] {
+  left: 0;
+  transform: scale(var(--inv));
+}
+.label[data-align='right'] {
+  right: 0;
+  transform: scale(var(--inv));
+}
+
+.label[data-place='above'][data-align='center'] { transform-origin: 50% 100%; }
+.label[data-place='below'][data-align='center'] { transform-origin: 50% 0; }
+.label[data-place='above'][data-align='left'] { transform-origin: 0 100%; }
+.label[data-place='below'][data-align='left'] { transform-origin: 0 0; }
+.label[data-place='above'][data-align='right'] { transform-origin: 100% 100%; }
+.label[data-place='below'][data-align='right'] { transform-origin: 100% 0; }
+
+.hotspot:hover .label,
+.hotspot:focus-visible .label {
+  opacity: 1;
+  translate: 0 0;
+}
+
+.labelKind {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ivory-dim);
+}
+
+.labelTitle {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.labelMeta {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ivory-dim);
+}
+
+.labelMeta[data-tone='processing'] {
+  color: var(--brass);
+}
+
+.labelMeta[data-tone='ready'] {
+  color: var(--ivory);
+}
+
+/* ---------- جوّ ثابت فوق الصورة (لا يلتقط المؤشر) ---------- */
+.atmosphere {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(34rem 15rem at 100% 0%, rgba(10, 9, 8, 0.7), transparent 72%),
+    radial-gradient(28rem 10rem at 0% 100%, rgba(10, 9, 8, 0.6), transparent 72%),
+    radial-gradient(130% 100% at 50% 46%, transparent 58%, rgba(6, 6, 5, 0.55) 100%);
+}
+
+.loading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  max-width: none;
+  font-size: var(--t-sm);
+  color: var(--ivory-dim);
+}
+
+/* ---------- لوحة الموقع ---------- */
+.plaque {
+  position: absolute;
+  z-index: 3;
+  top: clamp(1rem, 2.6vh, 1.6rem);
+  inset-inline-start: clamp(1rem, 2.2vw, 1.75rem);
+  display: grid;
+  gap: 0.35rem;
+  max-width: 21rem;
+  transition:
+    opacity 280ms var(--ease-power2),
+    translate 320ms var(--ease-power2);
+  animation: settleIn 700ms 450ms var(--ease-expo) backwards;
+}
+
+.plaque[data-hidden='true'] {
+  opacity: 0;
+  translate: 12px 0;
+  pointer-events: none;
+}
+
+.plaqueHere {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--ivory);
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.7);
+}
+
+.plaqueTick {
+  width: 2px;
+  height: 1.05em;
+  background: var(--brass);
+}
+
+.plaqueNote {
+  margin: 0;
+  padding-inline-start: calc(2px + 0.65rem);
+  max-width: 34ch;
+  font-size: 0.8rem;
+  line-height: 1.65;
+  color: var(--ivory-dim);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.8);
+}
+
+.plaqueRoutes {
+  margin: 0.15rem 0 0;
+  padding: 0;
+  padding-inline-start: calc(2px + 0.65rem);
+  list-style: none;
+}
+
+.plaqueRoute {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.25rem;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--ivory-dim);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.8);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.plaqueRoute:hover {
+  color: var(--ivory);
+}
+
+.plaqueRoute:focus-visible {
+  outline: 2px solid var(--ivory);
+  outline-offset: 4px;
+}
+
+.plaqueArrow {
+  color: var(--brass);
+  transition: translate var(--dur-fast) var(--ease-out);
+}
+
+.plaqueRoute:hover .plaqueArrow {
+  translate: -3px 0;
+}
+
+/* ---------- حافة المشهد: تلميح أول مرة + عناصر بلا موضع ---------- */
+.margin {
+  position: absolute;
+  z-index: 3;
+  bottom: clamp(1rem, 2.6vh, 1.5rem);
+  inset-inline-end: clamp(1rem, 2.2vw, 1.75rem);
+  display: grid;
+  gap: 0.6rem;
+  max-width: 24rem;
+  animation: settleIn 700ms 1500ms var(--ease-expo) backwards;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--ivory-dim);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.85);
+}
+
+.unplaced {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* مدخل خارج إطار الصورة: عنصر حقيقي جسمه غير ظاهر بالصورة المعتمدة.
+   سطر هادئ بلا صندوق — لا موضع مختلق فوق الغرفة. */
+.offFrame {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.offFrameTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--brass);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.85);
+}
+
+.offFrameTitle::before {
+  content: '';
+  width: 0.9rem;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.7;
+}
+
+.unplacedItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.75rem;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--ivory);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.85);
+}
+
+.unplacedItem:focus-visible {
+  outline: 2px solid var(--ivory);
+  outline-offset: 4px;
+}
+
+.unplacedIcon {
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  color: var(--brass);
+  border: 1px solid rgba(179, 146, 99, 0.4);
+  background: rgba(15, 14, 12, 0.55);
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.unplacedItem:hover .unplacedIcon {
+  border-color: var(--brass);
+}
+
+.unplacedTitle {
+  font-weight: 500;
+}
+
+.unplacedMeta {
+  font-size: 0.75rem;
+  color: var(--ivory-dim);
+}
+
+.unplacedItem[data-tone='processing'] .unplacedMeta {
+  color: var(--brass);
+}
+
+.unplacedItem[data-tone='ready'] .unplacedMeta {
+  color: var(--ivory);
+}
+
+.unplacedGo {
+  color: var(--brass);
+  transition: translate var(--dur-fast) var(--ease-out);
+}
+
+.unplacedItem:hover .unplacedGo {
+  translate: -3px 0;
+}
+
+@keyframes settleIn {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+
+/* ---------- تنبيه (خطأ حقيقي من السيرفر) ---------- */
+.toast {
+  position: absolute;
+  z-index: 8;
+  top: 1rem;
+  left: 50%;
+  translate: -50% 0;
+  max-width: min(36rem, calc(100% - 2rem));
+  margin: 0;
+  padding: 0.6rem 1rem;
+  font-size: var(--t-sm);
+  color: var(--ivory);
+  background: rgba(18, 15, 13, 0.94);
+  border: 1px solid rgba(154, 59, 50, 0.45);
+  border-inline-start: 2px solid var(--trace);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  animation: settleIn 300ms var(--ease-power2) backwards;
+}
+
+/* ---------- منفذ ملف الفحص ---------- */
+.dossierSlot {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  bottom: 0;
+  inset-inline-start: 0;
+  width: var(--dossier-size);
+  display: flex;
+}
+
+.dossierSlot[data-layout='sheet'] {
+  top: auto;
+  inset-inline: 0;
+  width: auto;
+  height: var(--dossier-size);
+}
+
+/* ---------- سطح محايد (موقع بلا صورة معتمدة) ---------- */
+.surface {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  background:
+    radial-gradient(70rem 36rem at 85% -10%, rgba(179, 146, 99, 0.07), transparent 60%),
+    radial-gradient(60rem 40rem at 0% 110%, rgba(147, 161, 171, 0.05), transparent 60%),
+    linear-gradient(180deg, #131211 0%, #0c0b0a 100%);
+  animation: surfaceIn 520ms var(--ease-power2) backwards;
+}
+
+@keyframes surfaceIn {
+  from {
+    opacity: 0;
+  }
+}
+
+.surfaceBody {
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+  min-height: 100%;
+  padding: clamp(4.5rem, 11vh, 7rem) clamp(1.5rem, 6vw, 5.5rem) 3rem;
+  transition: padding-inline-start 460ms var(--ease-power2);
+}
+
+.surfaceBody > * {
+  max-width: 38rem;
+}
+
+.viewport[data-focus='true'][data-layout='side'] .surfaceBody {
+  padding-inline-start: calc(var(--dossier-size) + clamp(1.5rem, 4vw, 3.5rem));
+  transition-duration: 780ms;
+  transition-timing-function: var(--ease-inout);
+}
+
+.surfaceKicker {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--brass);
+}
+
+.surfaceTitle {
+  font-size: clamp(1.9rem, 3vw, 2.5rem);
+  font-weight: 300;
+  line-height: 1.2;
+  color: var(--ivory);
+}
+
+.surfaceNote {
+  margin: 0.25rem 0 0;
+  font-size: 0.92rem;
+  line-height: 1.75;
+  color: var(--ivory-dim);
+}
+
+.surfaceEmpty {
+  margin-top: 2.5rem;
+  font-size: 0.92rem;
+  color: var(--ivory-dim);
+}
+
+.index {
+  margin: 2.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid rgba(236, 227, 207, 0.08);
+}
+
+.indexRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.9rem;
+  width: 100%;
+  min-height: 3.5rem;
+  padding: 0 0.35rem;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid rgba(236, 227, 207, 0.08);
+  color: var(--ivory);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.index li[data-depth='1'] .indexRow {
+  min-height: 3rem;
+  padding-inline-start: 2rem;
+  font-size: 0.92rem;
+}
+
+.indexRow:hover,
+.indexRow[aria-current='true'] {
+  background: rgba(236, 227, 207, 0.035);
+}
+
+.indexRow[aria-current='true'] {
+  box-shadow: inset -2px 0 0 var(--brass);
+}
+
+.indexRow:focus-visible {
+  outline: 2px solid var(--ivory);
+  outline-offset: -2px;
+}
+
+.indexIcon {
+  display: grid;
+  place-items: center;
+  color: var(--forensic-steel);
+}
+
+.indexTitle {
+  font-weight: 500;
+}
+
+.indexMeta {
+  font-size: 0.78rem;
+  color: var(--ivory-dim);
+}
+
+.indexRow[data-tone='processing'] .indexMeta {
+  color: var(--brass);
+}
+
+.indexRow[data-tone='ready'] .indexMeta {
+  color: var(--ivory);
+}
+
+.indexGo {
+  color: var(--brass);
+  transition: translate var(--dur-fast) var(--ease-out);
+}
+
+.indexRow:hover .indexGo {
+  translate: -4px 0;
+}
+
+/* ---------- لقطة قريبة لعنصر مفحوص ----------
+   كأن اللاعب انحنى نحو الشيء: صورة مرفوعة فوق الغرفة المعتّمة
+   بالمساحة الحرة، والغرفة تبقى ظاهرة حولها. الحاوية لا تلتقط
+   النقر (النقر على الغرفة حولها يبقى "خطوة للخلف"). */
+.closeUp {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  justify-items: center;
+  gap: 0.6rem;
+  margin: 0;
+  pointer-events: none;
+}
+
+.closeUpPlate {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 0;
+  pointer-events: auto;
+  animation: liftIn 560ms var(--ease-expo) backwards;
+}
+
+.closeUpPlate[data-loading='true'] {
+  width: min(22rem, 70%);
+  aspect-ratio: 3 / 2;
+  background: linear-gradient(110deg, rgba(236, 227, 207, 0.03), rgba(236, 227, 207, 0.07), rgba(236, 227, 207, 0.03));
+  border: 1px solid rgba(236, 227, 207, 0.08);
+}
+
+.closeUpImage {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border: 1px solid rgba(236, 227, 207, 0.14);
+  box-shadow:
+    0 1.75rem 3.5rem rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(0, 0, 0, 0.4);
+  user-select: none;
+}
+
+@keyframes liftIn {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem) scale(0.965);
+  }
+}
+
+.closeUpBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem 0.9rem;
+  pointer-events: auto;
+  padding: 0.35rem 0.6rem;
+  background: rgba(15, 14, 12, 0.72);
+  border: 1px solid rgba(179, 146, 99, 0.22);
+}
+
+.closeUpViews {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.closeUpView,
+.closeUpToggle {
+  min-height: 2.25rem;
+  padding: 0 0.75rem;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--ivory-dim);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+
+.closeUpView:hover,
+.closeUpToggle:hover {
+  color: var(--ivory);
+}
+
+.closeUpView[aria-pressed='true'] {
+  color: var(--ivory);
+  border-color: rgba(179, 146, 99, 0.55);
+}
+
+.closeUpToggle {
+  color: var(--ivory);
+}
+
+.closeUpView:focus-visible,
+.closeUpToggle:focus-visible {
+  outline: 2px solid var(--ivory);
+  outline-offset: 2px;
+}
+
+.closeUpLabel {
+  font-size: 0.82rem;
+  color: var(--ivory);
+  padding-inline: 0.4rem;
+}
+
+/* ---------- حركة مخفّضة: لا حركة غير ضرورية إطلاقاً ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .stage,
+  .viewport[data-focus='true'] .stage,
+  .image,
+  .veil,
+  .bracket,
+  .label,
+  .glint,
+  .plaque,
+  .plaqueArrow,
+  .unplacedGo,
+  .unplacedIcon,
+  .indexGo,
+  .closeUpView,
+  .closeUpToggle,
+  .surfaceBody,
+  .viewport[data-focus='true'][data-layout='side'] .surfaceBody {
+    transition: none !important;
+  }
+
+  .photo[data-ready='true'] .image,
+  .closeUpPlate,
+  .focusFrame,
+  .glint,
+  .hotspot[data-tone='ready'] .glint,
+  .plaque,
+  .margin,
+  .toast,
+  .surface {
+    animation: none !important;
+  }
+}

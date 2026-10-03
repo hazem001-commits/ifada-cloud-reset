@@ -1,0 +1,105 @@
+-- ============================================================
+-- IFADA — 021_investigation_evidence_bridge_PROPOSAL.sql
+-- DRAFT ONLY. NOT NUMBERED INTO THE REAL MIGRATION SEQUENCE.
+-- NOT REVIEWED, NOT APPROVED, NOT APPLIED. Do not run.
+--
+-- This is the architecture decision Phase 3 flagged in item 5:
+-- how (or whether) an Investigation Object's terminal output
+-- should connect to a real `evidence` row, so the exact same
+-- secure media/viewer pipeline applies to it.
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- WHY THIS IS NEEDED
+-- ------------------------------------------------------------
+-- Today, Investigation Objects (sql/019) and Evidence (sql/004) are
+-- two fully independent systems with zero shared rows. Room 714's
+-- vertical slice objects (BLOOD_STAIN, LAPTOP, PASSPORT) produce
+-- *their own* text, which happens to closely mirror F-02/F-03,
+-- D-01, and R-01's real content — but there is no row-level link.
+-- Phase 3's Case File V2 works around this honestly (two visually
+-- unified but structurally separate lists), which is correct for
+-- now. But it means investigation-object discoveries can never open
+-- in the real secure evidence/media pipeline, and can never carry
+-- real media (a photo, an audio clip) the way classic evidence can.
+--
+-- ------------------------------------------------------------
+-- EXACT RELATIONSHIP PROPOSED
+-- ------------------------------------------------------------
+-- No new table. No FK. Two small, additive, case-agnostic changes:
+--
+-- 1. Interactions may carry an optional `"unlocks_evidence"` key:
+--      {"code": "RECOVER_DRAFT", "spec": "digital",
+--       "requires_state": "INSPECTED", "produces_state": "DRAFT_RECOVERED",
+--       "unlocks_evidence": "D-01"}
+--    When `execute_object_interaction` advances an object into an
+--    interaction carrying this key, it performs the same insert
+--    `session_evidence` already does today (same table, same
+--    on-conflict-do-nothing, same `unlocked_by = auth.uid()`).
+--
+-- 2. `auto_advance` may carry the same key per target state instead
+--    of a bare string:
+--      {"PROCESSING": {"to": "ANALYZED", "unlocks_evidence": "F-02"}}
+--    for objects whose terminal transition is a background job
+--    (BLOOD_STAIN), not a direct player interaction.
+--
+-- The object's OWN description (state_descriptions) stays exactly
+-- as it is today — it does not disappear. `unlocks_evidence` is
+-- purely additive: it makes the *real* evidence row available too,
+-- as of that same moment, through the *existing* `evidence_index` /
+-- `/api/evidence-media` / viewer pipeline, unchanged.
+--
+-- ------------------------------------------------------------
+-- HOW EXISTING EVIDENCE SECURITY STAYS AUTHORITATIVE
+-- ------------------------------------------------------------
+-- Nothing about evidence_index, unlock_evidence, /api/evidence-media,
+-- or any viewer changes. execute_object_interaction would perform
+-- exactly the insert unlock_evidence already performs — the same
+-- table, the same RLS (none — session_evidence is written by
+-- SECURITY DEFINER functions only, this stays true), and the
+-- resulting row is then read back through the unmodified,
+-- already-audited evidence_index/media pipeline. The interaction's
+-- own specialization/state checks (already enforced) are a superset
+-- of what unlock_evidence independently checks (owner_spec match,
+-- requires met) for the target evidence code — so this only ever
+-- grants a real evidence row to a player who has already
+-- legitimately earned equivalent access through the object's own
+-- rules. No new authorization path, no bypass of anything existing.
+--
+-- ------------------------------------------------------------
+-- EFFECT ON EXISTING ROOM 714 DATA
+-- ------------------------------------------------------------
+-- Zero effect unless deliberately opted in. This would require a
+-- separate content edit to sql/019's seed rows (adding
+-- `unlocks_evidence` to 3 of the 7 interaction/auto_advance
+-- entries) — a data change, not a structural one, reviewable and
+-- reversible on its own. No existing evidence, session_evidence, or
+-- session_object_state row is touched by the function change itself.
+--
+-- ------------------------------------------------------------
+-- CASE-AGNOSTIC?
+-- ------------------------------------------------------------
+-- Yes. The mechanism (an optional jsonb key naming an evidence code
+-- to unlock) is generic — Scene 17 or any future case can use it or
+-- ignore it per-object, same as `requires_shared`/`processing_seconds`
+-- today. Whether a given object bothers to link to a real evidence
+-- row, or stays a standalone text discovery, is a per-object content
+-- decision, not an engine-wide requirement.
+--
+-- ------------------------------------------------------------
+-- NOT DECIDED YET / EXPLICITLY OUT OF SCOPE FOR THIS DRAFT
+-- ------------------------------------------------------------
+-- - Whether Case File V2 should then STOP showing the
+--   investigation-object's own text entry once its linked evidence
+--   unlocks (to avoid showing "the same thing twice"), or keep both
+--   (discovery narrative + final evidence) as intentionally distinct.
+-- - Whether GLASS_CUP/OPEN_WINDOW/VICTIM_ITEMS (which have no
+--   matching evidence row today, only fragments of F-01's body)
+--   should get their own dedicated evidence rows first, or stay
+--   investigation-object-only forever.
+--
+-- Needs a product decision before it's worth drafting the actual
+-- `create or replace function` diff — no point writing that until
+-- you've decided whether investigation objects should ever unlock
+-- real evidence rows at all, versus Case File V2's current
+-- two-lists-one-view approach being the permanent answer.

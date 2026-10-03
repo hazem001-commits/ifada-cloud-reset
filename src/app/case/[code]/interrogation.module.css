@@ -1,0 +1,184 @@
+/* ============================================================
+   src/app/case/[code]/interrogation.module.css
+   الاستجواب كـ"محضر" لا كتطبيق رسائل: عمود الأشخاص، وسجل رسمي
+   (المحقق / الشخص) بأسطر ومعروضات، وسطر سؤال المحقق.
+   أساس للمرحلة 9 (شخص + أقوال معروفة + تناقضات + مواجهة بدليل).
+   ============================================================ */
+
+.room {
+  display: grid;
+  grid-template-columns: 14rem minmax(0, 1fr);
+  min-block-size: calc(100dvh - 7rem);
+  background: #0e1317;
+}
+
+.people {
+  border-inline-end: 1px solid var(--line-soft);
+  padding: 0.9rem 0.75rem;
+  display: grid;
+  align-content: start;
+  gap: 0.4rem;
+}
+
+.peopleTitle {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: var(--brass);
+  margin-block-end: 0.3rem;
+}
+
+.person {
+  appearance: none;
+  display: grid;
+  gap: 0.15rem;
+  inline-size: 100%;
+  text-align: start;
+  background: transparent;
+  border: 1px solid transparent;
+  border-inline-start: 2px solid var(--line-strong);
+  color: var(--ivory);
+  font: inherit;
+  padding: 0.55rem 0.65rem;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+
+.person[aria-pressed='true'] {
+  background: #151c22;
+  border-inline-start-color: var(--brass);
+}
+
+.person:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 1px;
+}
+
+.personName {
+  font-size: var(--t-sm);
+  font-weight: 600;
+}
+
+.personMeta {
+  font-size: 0.72rem;
+  color: var(--ivory-dim);
+}
+
+.record {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-block-size: 0;
+}
+
+.log {
+  overflow-y: auto;
+  padding: 1rem clamp(1rem, 3vw, 1.75rem);
+  display: grid;
+  align-content: start;
+  gap: 0.15rem;
+}
+
+/* سطر محضر: المتكلم | القول — لا فقاعات يمين/يسار */
+.line {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: 0.9rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--line-soft);
+  animation: lineIn var(--dur-base) var(--ease-out) both;
+}
+
+.speaker {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--ivory-dim);
+  padding-block-start: 0.2rem;
+}
+
+.line[data-speaker='character'] .speaker {
+  color: var(--brass);
+}
+
+.statement {
+  font-size: var(--t-sm);
+  line-height: 1.75;
+  color: var(--ivory);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.line[data-speaker='player'] .statement {
+  color: var(--ivory-dim);
+}
+
+.exhibit {
+  display: inline-block;
+  margin-block-end: 0.25rem;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--signal);
+  color: var(--signal);
+}
+
+.desk {
+  border-top: 1px solid var(--line-soft);
+  padding: 0.85rem clamp(1rem, 3vw, 1.75rem);
+  display: grid;
+  gap: 0.55rem;
+  background: #10161b;
+}
+
+.deskLabel {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  color: var(--ivory-dim);
+}
+
+.deskRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.watch {
+  font-size: var(--t-sm);
+  color: var(--ivory-dim);
+  line-height: 1.7;
+}
+
+@keyframes lineIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .line {
+    animation: none;
+  }
+  .person {
+    transition: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .room {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .people {
+    border-inline-end: 0;
+    border-bottom: 1px solid var(--line-soft);
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(9rem, 1fr);
+    overflow-x: auto;
+  }
+  .line {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.2rem;
+  }
+}

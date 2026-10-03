@@ -1,0 +1,227 @@
+/* ============================================================
+   caseNav.module.css — رأس القضية: هوية خفيفة + تنقّل بدرجتين.
+   أساسي (التحقيق · ملف القضية · اللوحة) بارز؛ اللاحق والانتقالي
+   أصغر وأهدأ. التبويب النشط = خط نحاسي رفيع، لا كتلة ولا شريط SaaS.
+   الشريط فحم دافئ صلب — المشهد تحته يبقى نقياً بلا تمويه زجاجي.
+   ============================================================ */
+
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-5);
+  padding: 0 clamp(1rem, 2.4vw, 1.75rem);
+  min-height: 3.25rem;
+  background: #100f0d;
+  border-bottom: 1px solid rgba(179, 146, 99, 0.16);
+}
+
+.identity {
+  display: grid;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.caseTitle {
+  font-weight: 600;
+  font-size: var(--t-sm);
+  color: var(--ivory);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.caseMeta {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: baseline;
+  font-size: var(--t-xs);
+  color: var(--ivory-dim);
+  white-space: nowrap;
+}
+
+.specs {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+/* أسماء التخصصات بلون أوضح من التسمية — هي المعلومة نفسها */
+.specNames {
+  color: var(--ivory);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.caseCode {
+  font-family: var(--mono);
+  color: var(--ivory-dim);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.nav {
+  display: flex;
+  align-items: stretch;
+  gap: var(--sp-2);
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.group {
+  display: flex;
+  align-items: stretch;
+  gap: 0.1rem;
+}
+
+.group + .group {
+  position: relative;
+  padding-inline-start: var(--sp-4);
+  margin-inline-start: var(--sp-2);
+}
+
+/* فاصل قصير بين الدرجتين — ليس خطاً بطول الشريط */
+.group + .group::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 50%;
+  width: 1px;
+  height: 1rem;
+  translate: 0 -50%;
+  background: rgba(236, 227, 207, 0.14);
+}
+
+.tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 3.25rem;
+  padding: 0 var(--sp-3);
+  background: none;
+  border: 0;
+  color: var(--ivory-dim);
+  font: inherit;
+  font-size: var(--t-sm);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.tab::after {
+  content: '';
+  position: absolute;
+  inset-inline: var(--sp-3);
+  bottom: -1px;
+  height: 1.5px;
+  background: var(--brass);
+  transform: scaleX(0);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.tab:hover {
+  color: var(--ivory);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--ivory);
+  outline-offset: -4px;
+}
+
+.tab[aria-current='page'] {
+  color: var(--ivory);
+}
+
+.tab[aria-current='page']::after {
+  transform: scaleX(1);
+}
+
+/* الأساسي بارز */
+.core .tab {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: rgba(236, 227, 207, 0.74);
+}
+
+.core .tab[aria-current='page'],
+.core .tab:hover {
+  color: var(--ivory);
+}
+
+/* اللاحق والانتقالي يتراجع بصرياً */
+.later .tab {
+  padding: 0 var(--sp-2);
+  font-size: 0.8rem;
+  color: rgba(185, 177, 161, 0.82);
+}
+
+.later .tab::after {
+  inset-inline: var(--sp-2);
+  height: 1px;
+}
+
+.later .tab[aria-current='page'],
+.later .tab:hover {
+  color: var(--ivory);
+}
+
+.tag {
+  font-size: 0.65rem;
+  color: var(--ivory-dim);
+  border: 1px solid rgba(236, 227, 207, 0.14);
+  padding: 0 0.35rem;
+  line-height: 1.5;
+}
+
+.aside {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+@media (max-width: 1100px) {
+  .bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 0;
+    padding-top: var(--sp-2);
+  }
+
+  .nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .tab {
+    min-height: 2.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab,
+  .tab::after {
+    transition: none;
+  }
+}
+
+/* مسار التحقيق: علامات اتجاه هادئة بين المكان → الملف → اللوحة */
+.step {
+  display: inline-flex;
+  align-items: center;
+}
+
+.flowSep {
+  color: var(--brass);
+  opacity: 0.55;
+  font-size: 0.75rem;
+  padding-inline: 0.15rem;
+}
+
+.archive {
+  opacity: 0.7;
+}
