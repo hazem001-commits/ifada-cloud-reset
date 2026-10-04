@@ -20,7 +20,9 @@ held(code) as (select e.code from public.evidence e where e.case_id = 'room-714'
 rules(id) as (values ('R714_OPEN_ROOM'), ('R714_DELIVER_DRAFT'), ('R714_DELIVER_GUEST'), ('R714_DELIVER_LAB'),
                      ('R714_SCENE_DOCUMENTED'), ('R714_INSIGHT_DRAFT'), ('R714_INSIGHT_GUEST'), ('R714_INSIGHT_LAB'),
                      ('R714_INSIGHT_ACCESS'), ('R714_FOLLOW_DRAFT_PRIVATE'), ('R714_FOLLOW_DRAFT_TEAM')),
-o as (select * from public.investigation_objects where case_id = 'room-714')
+o as (select * from public.investigation_objects where case_id = 'room-714'),
+z3 as (select p.proname, p.prosrc from pg_proc p where p.pronamespace = 'public'::regnamespace
+       and p.proname in ('open_investigation', 'investigation_object_index'))
 select check_name, pass, detail from (
   -- N
   select 1 as ord, 'N1 noticing ' || n.code || ' is available to exactly: ' || array_to_string(n.specs, '+') as check_name,
@@ -135,8 +137,21 @@ select check_name, pass, detail from (
   select 51, 'Z2 no object gated except SECURITY_OFFICE',
          (select array_agg(case_id || ':' || code) from public.investigation_objects where gated) = array['room-714:SECURITY_OFFICE'], null
   union all
-  select 52, 'Z3 037 functions untouched (open_investigation / investigation_object_index md5 as 037 verified)',
-         (select md5(prosrc) from pg_proc where pronamespace = 'public'::regnamespace and proname = 'open_investigation') = '40eecd13f963c6552a434efa4c107a81'
-         and (select md5(prosrc) from pg_proc where pronamespace = 'public'::regnamespace and proname = 'investigation_object_index') = '4fa968e3f43d504d9cdbfd9556674601', null
+  -- Z3: 038 is content-only and never replaces a function. Body md5s differ between
+  -- environments (whitespace/dump formatting), so Z3 checks the 037 protections
+  -- SEMANTICALLY: they must still be present after 038.
+  select 52, 'Z3a open_investigation still never seeds a gated object (037 gated clause present)',
+         exists (select 1 from z3 where proname = 'open_investigation')
+         and (select bool_and(prosrc ~* 'not\s+o\.gated') from z3 where proname = 'open_investigation'), null
+  union all
+  select 53, 'Z3b investigation_object_index still requires known ancestors (_object_ancestors_known)',
+         exists (select 1 from z3 where proname = 'investigation_object_index')
+         and (select bool_and(prosrc ~ '_object_ancestors_known\s*\(') from z3 where proname = 'investigation_object_index'), null
+  union all
+  select 54, 'Z3c investigation_object_index still hides an unrevealed / teammate-private gated object',
+         (select bool_and(prosrc ~* 'not\s+o\.gated\s+or\s*\(\s*sos\.discovered') from z3 where proname = 'investigation_object_index'), null
+  union all
+  select 55, 'Z3d investigation_object_index still redacts a teammate''s private find as HIDDEN',
+         (select bool_and(prosrc ~* 'else\s+''HIDDEN''') from z3 where proname = 'investigation_object_index'), null
 ) checks
 order by ord, check_name;

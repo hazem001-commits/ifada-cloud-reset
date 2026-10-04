@@ -103,6 +103,19 @@ const interactionsOf = (code: string): Interaction[] => {
   return JSON.parse(blk!.match(/set interactions = '(\[[^']*\])'::jsonb/)![1]!) as Interaction[];
 };
 
+test('038 never redefines the 037-protected functions; Z3 checks their protections semantically (no env-specific md5)', () => {
+  for (const fn of ['open_investigation', 'investigation_object_index']) {
+    assert.doesNotMatch(S38, new RegExp(`create\\s+(or\\s+replace\\s+)?function\\s+(public\\.)?${fn}\\b`, 'i'), `038 must not (re)create ${fn}`);
+    assert.doesNotMatch(S38, new RegExp(`(alter|drop)\\s+function\\s+(public\\.)?${fn}\\b`, 'i'), `038 must not alter/drop ${fn}`);
+  }
+  const z3 = POST.slice(POST.indexOf("'Z3a"), POST.indexOf(') checks'));
+  assert.doesNotMatch(z3, /md5/i, 'Z3 does not depend on environment-specific body hashes');
+  assert.match(z3, /proname = 'open_investigation'[\s\S]*not\\s\+o\\\.gated/, 'Z3a: open_investigation gated clause');
+  assert.match(z3, /_object_ancestors_known/, 'Z3b: ancestor visibility');
+  assert.match(z3, /not\\s\+o\\\.gated\\s\+or/, 'Z3c: gated hiding in the index');
+  assert.match(z3, /else\\s\+''HIDDEN''/, 'Z3d: private redaction');
+});
+
 test('everyone can notice every ordinary object in the room — one gesture, one label, distinct codes', () => {
   for (const code of ORDINARY) {
     const notices = interactionsOf(code).filter((i) => i.requires_state === 'UNKNOWN');

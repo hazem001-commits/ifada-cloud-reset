@@ -8,7 +8,7 @@ at 360 / 390 / 430 / 768 / 1440. This checklist confirms the same on the **real 
 
 ## 0. Preconditions
 - [ ] Hazem applied `sql/038_room714_opening_runtime.sql` (037 not re-run).
-- [ ] `sql/verify_038_postapply.sql` in the SQL editor → every non-null `pass` is `true` (82 rows).
+- [ ] `sql/verify_038_postapply.sql` in the SQL editor → every non-null `pass` is `true` (85 rows).
 - [ ] A **new** Room 714 session (sessions from before 038 keep what they already hold).
 - [ ] Two accounts, split: **A = field + forensics**, **B = digital + records** (check in lobby).
 - [ ] Devices: A on a phone **360 or 390** wide, B on a phone **430** wide; plus one **desktop** (≥1280) window. Portrait. Real touch, not only devtools emulation, for at least one phone.
