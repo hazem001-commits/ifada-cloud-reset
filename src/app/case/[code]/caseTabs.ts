@@ -17,7 +17,7 @@ export function caseTabEnabled(tab: CaseTab, contract: CaseContract | null): boo
     case 'board':
       return systems.evidence || systems.objects;
     case 'evidence':
-      return systems.evidence;
+      return systems.evidence && contract.worldDiscoveryOnly !== true;
     case 'interrogation':
       return systems.interrogation;
     case 'reconstruction':

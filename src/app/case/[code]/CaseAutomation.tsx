@@ -9,6 +9,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { subscribeAuthenticated } from "@/lib/supabase/realtime";
 import CaseTimeBar, { type ExpiringItem } from "./CaseTimeBar";
+import { useCaseId } from "@/cases/CaseContext";
+import { getCaseContract } from "@/cases/registry";
 
 interface ClockRow {
   start_ck: number;
@@ -29,6 +31,7 @@ interface SessionEvent {
 export default function CaseAutomation({ sessionId }: { sessionId: string }) {
   const [clock, setClock] = useState<ClockRow | null>(null);
   const [expiring, setExpiring] = useState<ExpiringItem[]>([]);
+  const worldOnly = getCaseContract(useCaseId())?.worldDiscoveryOnly === true;
   const [banner, setBanner] = useState<SessionEvent | null>(null);
   const [blackout, setBlackout] = useState<SessionEvent | null>(null);
   const seen = useRef<Set<string>>(new Set());
@@ -43,12 +46,14 @@ export default function CaseAutomation({ sessionId }: { sessionId: string }) {
   }, [sessionId]);
 
   const loadExpiring = useCallback(async () => {
+    // اكتشاف بالعالم فقط: لا نطلب عناوين مواد لم يحصل عليها الفريق أصلاً.
+    if (worldOnly) return;
     const supabase = createClient();
     const { data } = await supabase.rpc("expiring_evidence", {
       p_session: sessionId,
     });
     if (data) setExpiring(data as ExpiringItem[]);
-  }, [sessionId]);
+  }, [sessionId, worldOnly]);
 
   // تحميل أولي + تحديث الساعة كل 20 ثانية (عرض بصري فقط،
   // كل فحص فعلي للانتهاء يصير بالسيرفر وقت الفتح)
@@ -126,7 +131,8 @@ export default function CaseAutomation({ sessionId }: { sessionId: string }) {
   return (
     <>
       {/* شريط الساعة الحية + الفرص المؤقتة */}
-      {clock && <CaseTimeBar nowCk={clock.now_ck} expiring={expiring} />}
+      {/* اكتشاف بالعالم فقط: لا تُسمّى مادة لم يحصل عليها الفريق ("فرصة مؤقتة" بعنوان دليل غير مكتشف). */}
+      {clock && <CaseTimeBar nowCk={clock.now_ck} expiring={worldOnly ? [] : expiring} />}
 
       {/* بث حي — شريط إشعار */}
       {banner && (

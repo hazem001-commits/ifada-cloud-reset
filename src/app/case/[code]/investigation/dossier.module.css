@@ -31,6 +31,10 @@
 }
 
 [data-layout='sheet'] > .dossier {
+  /* ورقة الهاتف معتمة تماماً: لا يتسرّب نص المشهد من تحتها */
+  background:
+    linear-gradient(180deg, rgba(179, 146, 99, 0.05), transparent 22rem),
+    #11100e;
   border-inline-end: 0;
   border-top: 1px solid rgba(179, 146, 99, 0.2);
   box-shadow: 0 -1.5rem 3rem rgba(0, 0, 0, 0.38);

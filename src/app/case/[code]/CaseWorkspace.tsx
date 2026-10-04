@@ -26,6 +26,12 @@ import { CaseProvider } from "@/cases/CaseContext";
 import { getCaseContract } from "@/cases/registry";
 import { visibleEvidenceRows } from "@/lib/evidenceVisibility";
 import RuntimeInspector from "./runtime/RuntimeInspector";
+import { PlayProvider } from "./play/PlayContext";
+import TeamPresence from "./play/TeamPresence";
+import LeadThreads from "./play/LeadThreads";
+import type { LeadPointer } from "@/cases/presentation";
+import CaseBriefing, { briefingSeen, markBriefingSeen } from "./play/CaseBriefing";
+import { getCasePresentation } from "@/cases/registry";
 import { runtimeInspectorEnabled } from "@/lib/runtime/devGate";
 
 type Tab = CaseTab;
@@ -65,14 +71,19 @@ export default function CaseWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [flash, setFlash] = useState<string | null>(null);
+  // بلاغ الوصول: مرة لكل لاعب بكل جلسة (يُقرأ بعد التركيب — تخزين المتصفح).
+  const hasOpening = !!getCasePresentation(caseId).opening;
+  const [briefing, setBriefing] = useState(false);
 
   const load = useCallback(async () => {
     const supabase = createClient();
 
     const channelCase = getCaseContract(caseId)?.distribution.kind === "channels";
+    // اكتشاف بالعالم فقط: قائمة الفتح القديمة لا تُطلب أصلاً (عناوين مواد لم تُكتشف لا تصل للمتصفح).
+    const worldOnly = getCaseContract(caseId)?.worldDiscoveryOnly === true;
     const [idx, unlockables, lanes] = await Promise.all([
       supabase.rpc("evidence_index", { p_session: sessionId }),
-      supabase.rpc("unlockable_evidence", { p_session: sessionId }),
+      worldOnly ? Promise.resolve({ data: [], error: null }) : supabase.rpc("unlockable_evidence", { p_session: sessionId }),
       // إرشاد عرض من السيرفر (أكواد أقرؤها أصلاً فقط)؛ الفشل = لا إرشاد، والسيرفر يقرر عند التثبيت.
       channelCase
         ? fetch("/api/private-evidence", {
@@ -110,6 +121,7 @@ export default function CaseWorkspace({
     void (async () => {
       await supabase.rpc("open_case", { p_session: sessionId });
       await load();
+      if (hasOpening && !briefingSeen(sessionId, myId)) setBriefing(true);
       const supabase2 = createClient();
 
       const { data: s } = await supabase2
@@ -123,7 +135,7 @@ export default function CaseWorkspace({
         setStartedAt(s.started_at);
       }
     })();
-  }, [sessionId, load]);
+  }, [sessionId, load, hasOpening, myId]);
 
   // مزامنة حية: أي دليل يفتحه أي عضو يوصل للكل فوراً.
   // الحدث إشارة فقط — الحالة الموثوقة من evidence_index (مع إعادة جلب
@@ -168,8 +180,25 @@ export default function CaseWorkspace({
     });
   }
 
+  const contract = getCaseContract(caseId);
+
+  // خيط → اتجاهه: تبويب يفتحه اللاعب، أو عنصر/مكان في المشهد (نفس مسار
+  // "ارجع لمصدره": يُركَّز فقط إن كان في فهرسي أنا — لا كشف لشيء مخفي).
+  const followLead = (pointer: LeadPointer) => {
+    if (pointer.kind === "tab") return setTab(pointer.tab);
+    setSourceFocus((prev) => ({ code: pointer.code, nonce: (prev?.nonce ?? 0) + 1 }));
+    setTab("investigation");
+  };
+
   return (
     <CaseProvider caseId={caseId}>
+      <PlayProvider
+        sessionId={sessionId}
+        myId={myId}
+        members={members}
+        mySpecs={mySpecs}
+        enabled={!!contract?.runtime.engine}
+      >
       <div
         style={
           tab === "investigation"
@@ -201,7 +230,17 @@ export default function CaseWorkspace({
           roomCode={code}
           specs={mySpecs}
           sessionClosed={sessionStatus === "closed"}
-          aside={<VoiceRoom sessionId={sessionId} myName={myName} />}
+          aside={
+            <>
+              {contract?.runtime.engine && <TeamPresence />}
+              {contract?.runtime.engine && (
+                <LeadThreads variant="header" onFollow={followLead} onBriefing={hasOpening ? () => setBriefing(true) : undefined} />
+              )}
+              <span className="case-voice">
+                <VoiceRoom sessionId={sessionId} myName={myName} />
+              </span>
+            </>
+          }
         />
 
         {flash && (
@@ -225,6 +264,7 @@ export default function CaseWorkspace({
           <InvestigationEngine
             key={sourceFocus?.nonce ?? 0}
             sessionId={sessionId}
+            evidence={evidence}
             onNavigate={setTab}
             initialFocus={sourceFocus?.code ?? null}
           />
@@ -278,7 +318,24 @@ export default function CaseWorkspace({
             )}
           </div>
         )}
+
+        {tab === "investigation" && contract?.runtime.engine && !loading && !error && (
+          <LeadThreads variant="pill" onFollow={followLead} onBriefing={hasOpening ? () => setBriefing(true) : undefined} />
+        )}
+
+        {briefing && !loading && !error && (
+          <CaseBriefing
+            caseTitle={caseTitle}
+            evidence={evidence}
+            onEnter={() => {
+              markBriefingSeen(sessionId, myId);
+              setBriefing(false);
+              setTab("investigation");
+            }}
+          />
+        )}
       </div>
+      </PlayProvider>
     </CaseProvider>
   );
 }

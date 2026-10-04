@@ -95,6 +95,8 @@ export interface CaseFileEntry {
   section: CaseFileSection;
   body: string;
   provenance: string | null;
+  /** العهدة: من أدخل المادة إلى سجل الفريق (من runtime_provenance المصرّح بها). */
+  custodian: string | null;
   origin: string | null;
   clock: string | null;
   hasMedia: boolean;
@@ -171,6 +173,7 @@ export function entryFromEvidence(item: EvidenceItem, source?: EvidenceSource, c
     provenance: source
       ? `${SOURCE_VERB[source.object_category] ?? 'مصدرها'}: ${source.object_title}`
       : null,
+    custodian: null,
     origin: item.owner_spec ? `ضمن اختصاص ${specLabel(item.owner_spec)}` : null,
     clock: item.clock_label,
     hasMedia: item.has_media,
@@ -200,6 +203,7 @@ export function entryFromObject(object: InvestigationObject, profiles: CaseProfi
     section: IDENTITY_SECTION[identity],
     body: object.description,
     provenance: profile?.provenance ?? null,
+    custodian: null,
     origin: null,
     clock: null,
     hasMedia: false,
@@ -215,6 +219,47 @@ export function entryFromObject(object: InvestigationObject, profiles: CaseProfi
 // الأدوات (أرشيف/نظام دخول) والأماكن مش مواد — ما بتدخل الملف بنفسها؛
 // اللي بتستخرجه (إطار، سجل) هو اللي بيدخل كدليل.
 const NOT_MATERIAL = new Set(['location', 'archive', 'access']);
+
+/**
+ * سلسلة العهدة لمادة أنتجها العالم: كيف دخلت (نص العرض المكتوب) ومن
+ * أدخلها (فاعل runtime_provenance — صفوف لعقد أراها فقط). لا تغيّر ما يظهر:
+ * تُكمل مدخلات موجودة أصلاً.
+ */
+export function withCustody(
+  entries: CaseFileEntry[],
+  custody: Readonly<Record<string, string>> | undefined,
+  provenance: readonly { node_kind: string; node_code: string; actor_id: string | null }[],
+  names: ReadonlyMap<string, string>,
+): CaseFileEntry[] {
+  const actorOf = new Map(provenance.filter((p) => p.node_kind === 'evidence').map((p) => [p.node_code, p.actor_id]));
+  return entries.map((e) => {
+    if (e.source.kind !== 'evidence') return e;
+    // نص العهدة المكتوب أغنى من عبارة المصدر العامة ("مصدرها: …") — يفوز إن وُجد.
+    const how = (custody ? own(custody, e.code) : undefined) ?? e.provenance;
+    const actor = actorOf.get(e.code);
+    return { ...e, provenance: how, custodian: actor ? names.get(actor) ?? null : null };
+  });
+}
+
+/**
+ * مصادر لمادة أنتجها العالم من عنصر (عرض القضية: عنصر@حالة → مادة) — لعنصر
+ * أراه في تلك الحالة فقط. تجعل المادة هي المدخل (لا العنصر) كما يفعل
+ * evidence_provenance لما سجّلته الأدوات. عرض فقط، لا صلاحية.
+ */
+export function producedSources(
+  objects: readonly InvestigationObject[],
+  produces: Readonly<Record<string, Readonly<Record<string, string>>>> | undefined,
+  existing: readonly EvidenceSource[],
+): EvidenceSource[] {
+  if (!produces) return [];
+  const known = new Set(existing.map((s) => s.evidence_code));
+  const out: EvidenceSource[] = [];
+  for (const o of objects) {
+    const code = isMineOrShared(o) ? own(produces, o.code)?.[o.state] : undefined;
+    if (code && !known.has(code)) out.push({ evidence_code: code, object_code: o.code, object_title: o.title, object_category: o.category });
+  }
+  return out;
+}
 
 export function buildEntries(
   evidence: EvidenceItem[],

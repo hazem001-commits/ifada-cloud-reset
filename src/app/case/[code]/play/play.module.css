@@ -1,0 +1,826 @@
+/* ============================================================
+   play.module.css — طبقة اللعب الجماعي فوق المشهد (RESET-2).
+   حضور الفريق (أعلى نهاية السطر) · الخيوط (أسفل بداية السطر) ·
+   ورقة التحقيق (هاتف: من الأسفل؛ عريض: عمود من نهاية السطر) ·
+   ملاحظة / تسليم داخل ملف الفحص.
+   نفس المفردات: فحم دافئ، عاجي، خيط نحاسي، شرائط حجب. لا توهج ولا
+   شارات ولا عدّادات تقدّم. كل حركة تقول شيئاً عن حالة، وتسقط مع
+   prefers-reduced-motion.
+   ============================================================ */
+
+/* ---------------- حضور الفريق + النبض (في رأس القضية) ---------------- */
+.presence {
+  display: flex;
+  min-width: 0;
+  animation: fadeIn 700ms 600ms var(--ease-expo) backwards;
+}
+
+.presenceRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 0.35rem 0.85rem;
+  margin: 0;
+  padding: 0.25rem 0.6rem;
+  background: transparent;
+  border: 1px solid rgba(236, 227, 207, 0.08);
+  border-radius: 999px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+
+.presenceRow:hover {
+  border-color: rgba(179, 146, 99, 0.4);
+  background: rgba(14, 13, 12, 0.72);
+}
+
+.presenceRow:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 3px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2rem;
+}
+
+.monogram {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid rgba(236, 227, 207, 0.28);
+  background: rgba(236, 227, 207, 0.05);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ivory);
+  transition: border-color 420ms var(--ease-out), color 420ms var(--ease-out);
+}
+
+.tag[data-me='true'] .monogram {
+  border-style: dashed;
+  color: var(--ivory-dim);
+}
+
+.tag[data-live='true'] .monogram {
+  border-color: var(--st-teammate);
+  color: var(--st-teammate);
+}
+
+.tag[data-system='true'] .monogram {
+  border-color: var(--signal);
+  color: var(--signal);
+  font-size: 0.7rem;
+}
+
+/* نبضة واحدة تتسع من بطاقة الزميل — "حدث شيء عنده". مرتين ثم تسكن. */
+.ripple {
+  position: absolute;
+  inset: -1px;
+  border-radius: 50%;
+  border: 1px solid var(--st-teammate);
+  animation: ripple 1700ms var(--ease-out) 2 both;
+  pointer-events: none;
+}
+
+.tag[data-system='true'] .ripple {
+  border-color: var(--signal);
+}
+
+@keyframes ripple {
+  from {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(2.4);
+  }
+}
+
+.tagText {
+  display: grid;
+  line-height: 1.25;
+  text-align: start;
+}
+
+.tagName {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--ivory);
+  white-space: nowrap;
+}
+
+.tagSpecs {
+  display: inline-flex;
+  gap: 0.3rem;
+  color: var(--ivory-dim);
+}
+
+.specGlyph {
+  display: inline-grid;
+  opacity: 0.85;
+}
+
+.tagPulse {
+  font-size: 0.72rem;
+  color: var(--st-teammate);
+  white-space: nowrap;
+  animation: inkIn 640ms var(--ease-expo) backwards;
+}
+
+.tag[data-system='true'] .tagPulse {
+  color: var(--signal);
+}
+
+@keyframes inkIn {
+  from {
+    opacity: 0;
+    clip-path: inset(0 0 0 100%);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    translate: 0 -6px;
+  }
+}
+
+/* ---------------- الخيوط ---------------- */
+/* زر الخيوط في رأس القضية (شاشة عريضة): لا يغطي المشهد، متاح من كل تبويب. */
+.threadsHead {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  max-width: min(22rem, 28vw);
+  padding: 0 0.85rem;
+  background: transparent;
+  border: 1px solid rgba(179, 146, 99, 0.3);
+  border-radius: 999px;
+  color: var(--ivory);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+
+.threadsHead:hover {
+  border-color: var(--brass);
+  background: rgba(179, 146, 99, 0.06);
+}
+
+.threadsHead[data-new='true'] {
+  animation: pillCall 1400ms var(--ease-out) 2;
+}
+
+.headWord {
+  font-weight: 500;
+}
+
+/* أحدث سؤال مفتوح — سطر واحد يتنفس بجانب الزر (ليس قائمة) */
+.headTicker {
+  min-width: 0;
+  padding-inline-start: 0.6rem;
+  border-inline-start: 1px solid rgba(236, 227, 207, 0.12);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ivory-dim);
+  animation: inkIn 760ms var(--ease-expo) backwards;
+}
+
+.headTicker[data-private='true'] {
+  color: var(--st-private);
+}
+
+.threadList {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.thread {
+  position: relative;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.7rem 0.85rem 0.75rem;
+  background: rgba(17, 16, 14, 0.86);
+  border: 1px solid rgba(236, 227, 207, 0.08);
+  border-inline-start: 2px solid rgba(179, 146, 99, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.thread[data-private='true'] {
+  border-inline-start-color: var(--st-private);
+  background: linear-gradient(160deg, rgba(163, 172, 208, 0.07), transparent 70%), rgba(17, 16, 14, 0.9);
+}
+
+.thread[data-status='closed'] {
+  border-inline-start-color: rgba(236, 227, 207, 0.18);
+  opacity: 0.72;
+}
+
+.thread[data-status='closed'] .threadLabel {
+  color: var(--ivory-dim);
+}
+
+/* خيط جديد: يُحبَّر من بداية السطر مرة واحدة، والحافة تتوهج بهدوء ثم تهدأ. */
+.thread[data-new='true'] {
+  animation: threadIn 900ms var(--ease-expo) backwards;
+}
+
+.thread[data-new='true']::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border: 1px solid rgba(179, 146, 99, 0.6);
+  animation: edgeFade 3200ms var(--ease-out) forwards;
+  pointer-events: none;
+}
+
+@keyframes threadIn {
+  from {
+    opacity: 0;
+    clip-path: inset(0 0 0 100%);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes edgeFade {
+  to {
+    opacity: 0;
+  }
+}
+
+.threadMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--ivory-dim);
+}
+
+.thread[data-private='true'] .threadMeta {
+  color: var(--st-private);
+}
+
+.threadStatus {
+  margin-inline-start: auto;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.02em;
+  color: var(--forensic-steel);
+}
+
+.thread[data-status='followed'] .threadStatus {
+  color: var(--st-shared);
+}
+
+.threadLabel {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: var(--ivory);
+}
+
+.threadActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.9rem;
+}
+
+.threadLink,
+.threadShare {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.25rem;
+  padding: 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.threadLink {
+  color: var(--brass);
+}
+
+.threadLink:hover {
+  color: var(--ivory);
+}
+
+.threadShare {
+  color: var(--st-private);
+}
+
+.threadShare:hover:not(:disabled) {
+  color: var(--ivory);
+}
+
+.threadShare:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.threadLink:focus-visible,
+.threadShare:focus-visible,
+.threadsMore:focus-visible,
+.threadsHead:focus-visible,
+.threadsPill:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}
+
+.threadsMore {
+  justify-self: start;
+  min-height: 2.25rem;
+  padding: 0 0.1rem;
+  background: none;
+  border: 0;
+  color: var(--ivory-dim);
+  font: inherit;
+  font-size: 0.78rem;
+  text-decoration: underline;
+  text-decoration-color: rgba(236, 227, 207, 0.25);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* زر الخيوط على الهاتف: بمتناول الإبهام، فوق حافة المتصفح. يتنحّى حين
+   يُفتح ملف فحص (ورقة سفلية) — لا يغطي أفعال اللاعب أبداً. */
+.threadsPill {
+  position: fixed;
+  z-index: 15;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 0.9rem);
+  inset-inline-start: 0.9rem;
+  display: none;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.9rem;
+  padding: 0 1rem 0 0.9rem;
+  background: rgba(17, 16, 14, 0.9);
+  border: 1px solid rgba(179, 146, 99, 0.45);
+  border-radius: 999px;
+  color: var(--ivory);
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+:global(body:has([data-focus='true'])) .threadsPill {
+  display: none !important;
+}
+
+.threadsPill[data-new='true'] {
+  animation: pillCall 1400ms var(--ease-out) 2;
+}
+
+@keyframes pillCall {
+  50% {
+    border-color: var(--brass);
+    box-shadow: 0 0 0 6px rgba(179, 146, 99, 0.12);
+  }
+}
+
+.pillThread {
+  width: 1rem;
+  height: 1px;
+  background: var(--brass);
+}
+
+.pillCount {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--brass);
+}
+
+/* ---------------- ورقة التحقيق ---------------- */
+.sheetLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 6, 5, 0.55);
+  animation: scrimIn 260ms var(--ease-out) backwards;
+}
+
+@keyframes scrimIn {
+  from {
+    opacity: 0;
+  }
+}
+
+.sheet {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(26rem, 100%);
+  background: linear-gradient(180deg, rgba(179, 146, 99, 0.05), transparent 18rem), #12110f;
+  border-inline-start: 1px solid rgba(179, 146, 99, 0.22);
+  box-shadow: 1.5rem 0 3rem rgba(0, 0, 0, 0.45);
+  color: var(--ivory);
+  outline: none;
+  animation: sheetSide 420ms var(--ease-expo) backwards;
+}
+
+@keyframes sheetSide {
+  from {
+    opacity: 0;
+    translate: -1.5rem 0;
+  }
+}
+
+.grip {
+  display: none;
+}
+
+.sheetHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.25rem 0.75rem;
+  border-bottom: 1px solid rgba(236, 227, 207, 0.07);
+}
+
+.sheetKicker {
+  margin: 0 0 0.2rem;
+  font-size: 0.72rem;
+  color: var(--brass);
+}
+
+.sheetTitle {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.sheetClose {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-block-start: -0.5rem;
+  margin-inline-end: -0.5rem;
+  background: none;
+  border: 0;
+  color: var(--ivory-dim);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sheetClose:hover {
+  color: var(--ivory);
+}
+
+.sheetClose:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: -4px;
+}
+
+.sheetBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  padding: 1rem 1.25rem calc(env(safe-area-inset-bottom, 0px) + 1.5rem);
+}
+
+.sheetSection {
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ivory-dim);
+}
+
+.empty {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.8;
+  color: var(--ivory-dim);
+}
+
+/* أثر الفريق: ذاكرة اجتماعية — خط زمني رفيع، لا بطاقات. */
+.trail {
+  position: relative;
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trail::before {
+  content: '';
+  position: absolute;
+  inset-block: 0.7rem;
+  inset-inline-start: 0.3rem;
+  width: 1px;
+  background: rgba(236, 227, 207, 0.1);
+}
+
+.trailItem {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.45rem 0;
+}
+
+.trailDot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  border: 1px solid var(--st-teammate);
+  background: #12110f;
+}
+
+.trailItem[data-me='true'] .trailDot {
+  border-color: var(--st-private);
+}
+
+.trailLine {
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.trailTime {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--forensic-steel);
+  white-space: nowrap;
+}
+
+.trailNote {
+  margin: 0.5rem 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(236, 227, 207, 0.07);
+  font-size: 0.8rem;
+  line-height: 1.7;
+  color: var(--ivory-dim);
+}
+
+/* ---------------- داخل ملف الفحص ---------------- */
+.notice {
+  display: grid;
+  gap: 0.55rem;
+  animation: fadeIn 520ms 120ms var(--ease-expo) backwards;
+}
+
+.noticeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 3rem;
+  padding: 0 1.2rem;
+  background: rgba(236, 227, 207, 0.06);
+  border: 1px solid rgba(236, 227, 207, 0.4);
+  color: var(--ivory);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+
+.noticeBtn:hover:not(:disabled) {
+  background: rgba(236, 227, 207, 0.12);
+  border-color: var(--ivory);
+}
+
+.noticeBtn:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.noticeBtn:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 3px;
+}
+
+.noticeBtn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.noticeText {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.7;
+  color: var(--ivory-dim);
+}
+
+.note {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(236, 227, 207, 0.1);
+  border-inline-start: 2px solid var(--st-shared);
+  background: rgba(136, 185, 168, 0.04);
+  animation: fadeIn 520ms 160ms var(--ease-expo) backwards;
+}
+
+.note[data-kind='pending'] {
+  border-inline-start-color: var(--st-private);
+  background: rgba(163, 172, 208, 0.04);
+}
+
+.note[data-kind='handoff'] {
+  border-inline-start-color: var(--brass);
+  background: rgba(179, 146, 99, 0.05);
+}
+
+.noteHead {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--ivory);
+}
+
+.noteText {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.7;
+  color: var(--ivory-dim);
+}
+
+.noteAction {
+  justify-self: start;
+  min-height: 2.5rem;
+  margin-top: 0.15rem;
+  padding: 0 1rem;
+  background: none;
+  border: 1px solid rgba(136, 185, 168, 0.5);
+  color: var(--ivory);
+  font: inherit;
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+
+.noteAction:hover {
+  border-color: var(--st-shared);
+  background: rgba(136, 185, 168, 0.08);
+}
+
+.noteAction:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}
+
+/* رأس القضية لا يزاحم التنقّل أبداً: درجات عرض.
+   ≥1680: الخيط الأحدث كسطر + أسماء الفريق وقدراته.
+   <1680: لا سطر خيط. <1500: حروف الفريق فقط (النبضة الحية تبقى نصاً). */
+@media (max-width: 1679px) {
+  .headTicker {
+    display: none;
+  }
+}
+
+@media (max-width: 1499px) {
+  .tag[data-live='false'] .tagText,
+  .tag[data-me='true'] .tagText,
+  .tag[data-live='true'] .tagName {
+    display: none;
+  }
+
+  .presenceRow {
+    gap: 0.35rem 0.5rem;
+  }
+
+  .headWord {
+    display: none;
+  }
+}
+
+/* ---------------- الهاتف واللوح العمودي ---------------- */
+@media (max-width: 759px) {
+  .presenceRow {
+    gap: 0.25rem;
+    padding: 0.15rem;
+  }
+
+  /* أسماء الزملاء تختفي؛ النبضة الحية وحدها تبقى نصاً قصيراً */
+  .tag[data-live='false'] .tagText,
+  .tag[data-me='true'] .tagText {
+    display: none;
+  }
+
+  .tag[data-live='true'] .tagName {
+    display: none;
+  }
+
+  /* على أضيق الشاشات: النبضة = حلقة + فئة قصيرة فقط */
+  .tagPulse {
+    font-size: 0.68rem;
+  }
+
+  .monogram {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .threadsHead {
+    display: none;
+  }
+
+  .threadsPill {
+    display: inline-flex;
+  }
+
+  .sheet {
+    inset-block: auto 0;
+    inset-inline: 0;
+    width: 100%;
+    max-height: min(82dvh, 44rem);
+    border-inline-start: 0;
+    border-top: 1px solid rgba(179, 146, 99, 0.28);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -1.5rem 3rem rgba(0, 0, 0, 0.5);
+    animation-name: sheetUp;
+  }
+
+  .grip {
+    display: block;
+    width: 2.5rem;
+    height: 4px;
+    margin: 0.55rem auto 0;
+    border-radius: 2px;
+    background: rgba(236, 227, 207, 0.22);
+  }
+
+  .sheetHead {
+    padding-top: 0.6rem;
+  }
+
+  @keyframes sheetUp {
+    from {
+      opacity: 0;
+      translate: 0 2rem;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .presence,
+  .headTicker,
+  .thread[data-new='true'],
+  .tagPulse,
+  .sheet,
+  .scrim,
+  .notice,
+  .note {
+    animation: none;
+  }
+
+  .ripple,
+  .thread[data-new='true']::after,
+  .threadsHead[data-new='true'],
+  .threadsPill[data-new='true'] {
+    animation: none;
+    opacity: 0;
+  }
+
+  .tag[data-live='true'] .monogram {
+    box-shadow: 0 0 0 2px rgba(196, 168, 112, 0.35);
+  }
+}

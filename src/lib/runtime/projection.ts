@@ -39,10 +39,13 @@ function parseLead(raw: unknown): Lead | null {
   const label = str(r.label, 200);
   if (!code || !CODE_RE.test(code) || !label) return null;
   if (r.status !== 'open' && r.status !== 'followed' && r.status !== 'closed') return null;
-  if (typeof r.shared !== 'boolean' || typeof r.mine !== 'boolean') return null;
+  // runtime_state يرجع mine = null لخيط الفريق (holder فارغ: holder = me → null).
+  // null = "ليس لي"؛ أي شكل آخر غير منطقي/فارغ = مغلق.
+  if (typeof r.shared !== 'boolean' || (typeof r.mine !== 'boolean' && r.mine !== null)) return null;
+  const mine = r.mine === true;
   // خيط غير مشترك ليس لي = لا يجب أن يصل أصلاً → مغلق عند الشك
-  if (!r.shared && !r.mine) return null;
-  return { code, label, status: r.status, shared: r.shared, mine: r.mine, openedAt: time(r.opened_at) };
+  if (!r.shared && !mine) return null;
+  return { code, label, status: r.status, shared: r.shared, mine, openedAt: time(r.opened_at) };
 }
 
 function parseWorld(raw: unknown): WorldState | null {

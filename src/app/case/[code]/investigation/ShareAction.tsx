@@ -11,7 +11,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { IconCheck, IconLock, IconTeam, IconTransmit } from './icons';
+import { IconCheck, IconLock, IconTransmit } from './icons';
 import d from './dossier.module.css';
 
 const SETTLE_MS = 2600;
@@ -19,13 +19,19 @@ const SETTLE_MS = 2600;
 export default function ShareAction({
   shared,
   busy,
-  needsHandoff,
+  handoffTo = null,
+  recordPending = false,
+  withParents = [],
   onShare,
 }: {
   shared: boolean;
   busy: boolean;
-  /** لا أداة لتخصصي هنا: المشاركة هي الخطوة الطبيعية التالية. */
-  needsHandoff: boolean;
+  /** زميل/زملاء يملكون القدرة التالية (أسماء) — مشاركة موجّهة. */
+  handoffTo?: string | null;
+  /** عندي نتيجة/مادة جاهزة تدخل ملف القضية حين أشارك. */
+  recordPending?: boolean;
+  /** أصول خاصة بي تُشارك معه (عناوين). */
+  withParents?: string[];
   onShare: () => void;
 }) {
   const [requested, setRequested] = useState(false);
@@ -46,17 +52,15 @@ export default function ShareAction({
             <IconCheck size={15} />
             وصل إلى الفريق
           </p>
-          <p className={d.shareText}>الفريق يرى هذا الاكتشاف الآن، ويمكن للمتخصص المناسب متابعته.</p>
+          <p className={d.shareText}>
+            {handoffTo ? `وصل إلى ${handoffTo} وبقية الفريق — المتابعة الآن بيده.` : 'الفريق يرى هذا الاكتشاف الآن، ويمكن للمتخصص المناسب متابعته.'}
+          </p>
           <span className={d.transmission} data-phase="delivered" aria-hidden="true" />
         </div>
       );
     }
-    return (
-      <p className={d.sharedLine}>
-        <IconTeam size={14} />
-        مشترك مع الفريق
-      </p>
-    );
+    // الحالة "مشترك مع الفريق" ظاهرة أصلاً تحت العنوان — لا تكرار هنا.
+    return null;
   }
 
   const sending = requested && busy;
@@ -68,9 +72,12 @@ export default function ShareAction({
         اكتشاف خاص
       </p>
       <p className={d.shareText}>
-        {needsHandoff
-          ? 'لا يعرف به أحد غيرك بعد، ومتابعته ليست ضمن أدوات تخصصك. شاركه ليصل إلى المتخصص المناسب في فريقك.'
-          : 'لا يعرف به أحد غيرك بعد. شاركه حين تقرّر ليصل إلى الفريق.'}
+        {handoffTo
+          ? 'لا يعرف به أحد غيرك بعد. الخطوة التالية ليست بأدواتك.'
+          : recordPending
+            ? 'النتيجة معك وحدك. حين تشاركه تدخل ملف القضية — سجل الفريق الرسمي.'
+            : 'لا يعرف به أحد غيرك بعد. شاركه حين تقرّر ليصل إلى الفريق.'}
+        {withParents.length > 0 && <> يُشارك معه موضعه: {withParents.join(' ← ')}.</>}
       </p>
       <button
         type="button"
@@ -84,7 +91,7 @@ export default function ShareAction({
         }}
       >
         <IconTransmit size={16} />
-        {sending ? 'جارٍ التسليم للفريق…' : 'مشاركة مع الفريق'}
+        {sending ? 'جارٍ التسليم للفريق…' : handoffTo ? `سلّمه إلى ${handoffTo}` : 'مشاركة مع الفريق'}
       </button>
       <span className={d.transmission} data-phase={sending ? 'sending' : 'idle'} aria-hidden="true" />
       {sending && (

@@ -113,6 +113,12 @@ export interface CaseContract {
   systems: CaseSystems;
   ai: CaseAiCapabilities;
   runtime: CaseRuntimeCapabilities;
+  /**
+   * RESET-2: المادة تُكتشف بالعالم، لا تُعرض كقائمة. true = لا تبويب
+   * "الأدلة القديمة" (فتح بالمتطلبات)، ولا تسمية مادة لم يحصل عليها الفريق
+   * بعد في أي سطح (مثل "فرص مؤقتة" بعناوين أدلة غير مكتشفة). غيابه = كما كان.
+   */
+  worldDiscoveryOnly?: boolean;
 }
 
 export const NO_SYSTEMS: CaseSystems = {

@@ -39,6 +39,8 @@ import RoomScene from './scene/RoomScene';
 import InspectionDossier from './InspectionDossier';
 import CaseInquiry from './inquiry/CaseInquiry';
 import { addFindingToBoard, readPinnedCodes, PIN_UNAVAILABLE_MESSAGE, SHARE_FIRST_MESSAGE } from './boardBridge';
+import { usePlay } from '../play/PlayContext';
+import { privateAncestors } from './labels';
 import r from './scene/roomScene.module.css';
 
 // "الدالة مش مثبّتة بعد" فقط = الميزة غير متاحة. أي خطأ ثاني لازم يبان.
@@ -52,11 +54,14 @@ const PROCESSING_REFRESH_MS = 20_000;
 
 export default function InvestigationEngine({
   sessionId,
+  evidence = [],
   onNavigate,
   initialFocus,
 }: {
   sessionId: string;
-  /** "اسأل التحقيق" قد يدلّ على تبويب آخر (الاستجواب) — اللاعب يفتحه بنفسه. */
+  /** ملف القضية كما يراه اللاعب (من مساحة العمل، متزامن حياً). */
+  evidence?: readonly EvidenceItem[];
+  /** "اسأل التحقيق" أو خيط قد يدلّ على تبويب آخر — اللاعب يفتحه بنفسه. */
   onNavigate?: (tab: 'interrogation') => void;
   /** "ارجع لمصدره" من لوحة التحقيق: عنصر يُركَّز عليه بعد التحميل — فقط إن كان ظاهراً لي. */
   initialFocus?: string | null;
@@ -80,6 +85,12 @@ export default function InvestigationEngine({
   const pendingFocusRef = useRef<string | null>(initialFocus ?? null);
   // قناة الجلسة المشتركة (للبث فقط بعد فعل ناجح مني) + بوابة الجلب.
   const channelRef = useRef<RealtimeChannel | null>(null);
+  // بعد كل قراءة موثوقة للعناصر: تسوية المحرك (مادة تنتظر قارئها تصل الآن).
+  const play = usePlay();
+  const nudgeRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    nudgeRef.current = play?.nudge ?? null;
+  }, [play]);
   const refetchRef = useRef<{ trigger(): Promise<void> | void } | null>(null);
 
   const load = useCallback(async () => {
@@ -111,11 +122,14 @@ export default function InvestigationEngine({
       processingRef.current = new Set(nextObjects.filter((o) => o.processing).map((o) => o.code));
       if (finished.length > 0) setReadyCodes((prev) => new Set([...prev, ...finished]));
       setObjects(nextObjects);
+      nudgeRef.current?.();
       // تركيز قادم من سطح آخر: يُستهلك مرة واحدة، وفقط لعنصر أعرفه.
       const want = pendingFocusRef.current;
       if (want) {
         pendingFocusRef.current = null;
-        const target = nextObjects.find((o) => o.code === want && o.discovered && o.state !== 'HIDDEN');
+        // أي عنصر في فهرسي أنا (السيرفر لا يدرج ما لا يحق لي رؤيته) — اكتشاف
+        // من اللوحة، أو اتجاه خيط نحو شيء ظاهر لي ولم يُفحص بعد.
+        const target = nextObjects.find((o) => o.code === want);
         if (target) {
           const byCode = new Map(nextObjects.map((o) => [o.code, o]));
           let loc = target.category === 'location' ? target : target.parent_code ? byCode.get(target.parent_code) : undefined;
@@ -202,14 +216,22 @@ export default function InvestigationEngine({
     setBusy(false);
   }
 
+  // مشاركة اكتشاف داخل اكتشاف خاص بي (جواز داخل أغراض لم أشاركها): الفريق
+  // لا يرى الابن بلا أصله (026) — فنشارك سلسلة أصولي الخاصة أولاً، من الأعلى،
+  // بنفس الـ RPC (كلها اكتشافاتي أنا). لا شيء لزميل يُشارك نيابة عنه.
   async function share(objectCode: string) {
     setBusy(true);
-    const { error: rpcError } = await createClient().rpc('share_object_discovery', {
-      p_session: sessionId,
-      p_object_code: objectCode,
-    });
-    if (rpcError) flashError(translateInteractionError(rpcError.message));
-    else await reloadAndSignal();
+    const supabase = createClient();
+    let failed = false;
+    for (const code of [...privateAncestors(objects, objectCode).map((o) => o.code), objectCode]) {
+      const { error: rpcError } = await supabase.rpc('share_object_discovery', { p_session: sessionId, p_object_code: code });
+      if (rpcError) {
+        flashError(translateInteractionError(rpcError.message));
+        failed = true;
+        break;
+      }
+    }
+    if (!failed) await reloadAndSignal();
     setBusy(false);
   }
 
@@ -295,8 +317,10 @@ export default function InvestigationEngine({
               object={focusedObject}
               workspace={workspaces[focusedObject.code] ?? null}
               challenges={challenges.filter((c) => c.object_code === focusedObject.code)}
+              evidence={evidence}
               locationTitle={focusLocation?.title ?? location?.title ?? 'موقع التحقيق'}
               parent={parent && parent.category !== 'location' ? parent : null}
+              sharesWith={privateAncestors(objects, focusedObject.code).map((o) => o.title)}
               discoveries={childrenOf(focusedObject.code)}
               readyCodes={readyCodes}
               pinned={pinned.has(focusedObject.code)}

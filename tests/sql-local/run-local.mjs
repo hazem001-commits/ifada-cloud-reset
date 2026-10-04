@@ -9,6 +9,8 @@
 //   4. 037_runtime_behavior → RT_SCENARIO_OK (loop, privacy, causality, SYSTEM actor, bound)
 //   5. concurrency          → same-session cascades serialize; other sessions do not wait
 //   6. no deadlock          → a player holding a row the cascade needs never loses their action
+//   038 (after 3)           → pre-verifier, apply twice, post-verifier, then the REAL
+//                             Room 714 opening played by two players (OPENING_OK)
 //   0. atomicity (before 2) → 037 with a failure injected before COMMIT leaves
 //                             the database byte-for-byte pre-037 (pre-verifier
 //                             still all TRUE)
@@ -51,6 +53,8 @@ const file = (rel, db = DB) => psql(['-f', path.join(ROOT, rel)], { db });
 const rows = (rel, db = DB) => psql(['-At', '-F', '|', '-f', path.join(ROOT, rel)], { db }).trim().split('\n').map((l) => l.split('|'));
 const SQL037 = readFileSync(path.join(ROOT, 'sql/037_investigation_runtime.sql'), 'utf8');
 const TPL = `${DB}_tpl`;
+const TPL38 = `${DB}_tpl38`;
+const SQL038 = readFileSync(path.join(ROOT, 'sql/038_room714_opening_runtime.sql'), 'utf8');
 const MUT = `${DB}_mut`;
 
 function assertVerifier(rel, db = DB) {
@@ -76,6 +80,18 @@ export function runLocal(log = console.log) {
   file('sql/037_investigation_runtime.sql');
   log('037 applied twice (idempotent)');
   log('post-apply:', assertVerifier('sql/verify_037_postapply.sql'));
+
+  // 038 (RESET-2 Room 714 opening content) on the clean 037 replica
+  log('038 pre-apply:', assertVerifier('sql/verify_038_preapply.sql'));
+  psql(['-c', `drop database if exists ${TPL38}`], { db: 'postgres' });
+  psql(['-c', `create database ${TPL38} template ${DB}`], { db: 'postgres' });
+  file('sql/038_room714_opening_runtime.sql');
+  file('sql/038_room714_opening_runtime.sql');
+  log('038 applied twice (idempotent)');
+  log('038 post-apply:', assertVerifier('sql/verify_038_postapply.sql'));
+  const opening = psql(['-f', path.join(ROOT, 'tests/sql-local/038_room714_opening.sql')]);
+  if (!opening.includes('OPENING_OK')) throw new Error('Room 714 opening scenario did not finish');
+  log('Room 714 opening (two players, full chapter): OPENING_OK');
 
   const scenario = psql(['-f', path.join(ROOT, 'tests/sql-local/037_runtime_behavior.sql')]);
   if (!scenario.includes('RT_SCENARIO_OK')) throw new Error('behaviour scenario did not finish');
@@ -133,7 +149,10 @@ async function noDeadlock(log, S) {
   const state = psql(['-Atc', `select state from session_object_state where session_id = '${S}' and object_code = 'PHONE'`]).trim();
   if (state !== 'DONE') throw new Error(`deferred firing never happened: PHONE = ${state}`);
   log('no deadlock: player transaction committed; the blocked firing re-fired in its own cascade');
-  if (process.env.IFADA_LOCAL_PG_MUTATIONS !== '0') mutations(log);
+  if (process.env.IFADA_LOCAL_PG_MUTATIONS !== '0') {
+    mutations(log);
+    mutations038(log);
+  }
   return true;
 }
 
@@ -220,4 +239,60 @@ function mutations(log) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   runLocal().then(() => console.log('SQL LOCAL 037: ALL PASS'), (e) => { console.error(e.message); process.exit(1); });
+}
+
+// 038 mutations: each removes ONE opening protection; the post-038 verifier or the
+// two-player opening scenario must fail on the named check.
+const MUTATIONS_038 = [
+  // killed one layer earlier: 037's validator refuses to approve a delivery of initial material
+  { name: 'draft handed out at case start again', expect: 'delivered material must be runtime-only (requires = {@RUNTIME}, not initial)',
+    from: "set is_initial = false, requires = '{@RUNTIME}'\nwhere case_id = 'room-714'\n  and code in ('D-01', ", to: "set is_initial = false, requires = '{@RUNTIME}'\nwhere case_id = 'room-714'\n  and code in (" },
+  { name: 'RAMI_FOUND trigger (F-04) left on the legacy path', expect: 'F-04 refused on the legacy path',
+    from: "'F-04', 'F-06', 'F-07', 'R-03'); -- held", to: "'F-06', 'F-07', 'R-03'); -- held" },
+  { name: 'later-chapter clue (V-08) left on the legacy path', expect: 'V-08 (later chapter) refused on the legacy path',
+    from: "  and code not in ('V-01', 'D-01', 'R-01', 'F-01', 'F-02', 'D-02',", to: "  and code not in ('V-01', 'D-01', 'R-01', 'F-01', 'F-02', 'D-02', 'V-08'," },
+  { name: 'M1 plan (R-03) left on the legacy path', expect: 'Q is offered nothing on the legacy list',
+    from: "'F-07', 'R-03'); -- held", to: "'F-07'); -- held" },
+  { name: 'security office not gated', expect: 'security office (gated) never seeded',
+    from: "set gated = true\nwhere case_id = 'room-714' and code = 'SECURITY_OFFICE';", to: "set gated = false\nwhere case_id = 'room-714' and code = 'SECURITY_OFFICE';" },
+  { name: 'records lookup still locked behind a share', expect: 'CHALLENGE_NOT_FOUND',
+    from: "update public.investigation_challenges\nset requires_shared = false\nwhere case_id = 'room-714' and code = 'GUEST_FILE_LOOKUP';", to: "" },
+  { name: 'only field can notice (no specialist noticing)', expect: 'Q (digital+records) can notice the device',
+    from: ',\n  {"code":"INSPECT_DIGITAL","label":"عاين سطحياً","spec":"digital","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0}', to: '' },
+  { name: 'lab result text repeats the restricted report', expect: 'Q sees that a result exists, not what it says',
+    from: '{"ANALYZED": "وصلت نتيجة التحليل المخبري للعيّنة. التقرير الكامل محفوظ في ملف القضية."}', to: '{"ANALYZED": "الدم يعود لأنثى."}' },
+  { name: 'insight lead opened for the whole team (leaks the reader’s material)', expect: 'insight lead is private to the records reader',
+    from: "('room-714', 'R714_INSIGHT_GUEST', 'approved', 'actor',", to: "('room-714', 'R714_INSIGHT_GUEST', 'approved', 'team'," },
+  { name: 'scene report without the whole room documented', expect: 'no scene report while the window is undocumented',
+    from: ',\n   {"kind":"object_discovered","object":"OPEN_WINDOW"}', to: '' },
+];
+
+function mutations038(log) {
+  let killed = 0;
+  for (const m of MUTATIONS_038) {
+    if (SQL038.split(m.from).length !== 2) throw new Error(`038 mutation "${m.name}": anchor must occur exactly once`);
+    const sql = SQL038.replace(m.from, m.to);
+    psql(['-c', `drop database if exists ${MUT}`], { db: 'postgres' });
+    psql(['-c', `create database ${MUT} template ${TPL38}`], { db: 'postgres' });
+    const failures = [];
+    try {
+      psql(['-f', '-'], { db: MUT, input: sql });
+    } catch (e) {
+      failures.push(`apply: ${e.message}`);
+    }
+    if (failures.length === 0) {
+      try { assertVerifier('sql/verify_038_postapply.sql', MUT); } catch (e) { failures.push(`post-verifier: ${e.message}`); }
+      try {
+        const out = psql(['-f', path.join(ROOT, 'tests/sql-local/038_room714_opening.sql')], { db: MUT });
+        if (!out.includes('OPENING_OK')) failures.push('scenario: did not finish');
+      } catch (e) { failures.push(`scenario: ${e.message}`); }
+    }
+    if (failures.length === 0) throw new Error(`038 mutation SURVIVED: ${m.name}`);
+    if (!failures.some((f) => f.includes(m.expect))) throw new Error(`038 mutation "${m.name}" failed for the wrong reason:\n${failures.join('\n').slice(0, 900)}`);
+    killed += 1;
+    log('  killed (038):', m.name);
+  }
+  psql(['-c', `drop database if exists ${MUT}`], { db: 'postgres' });
+  psql(['-c', `drop database if exists ${TPL38}`], { db: 'postgres' });
+  log(`038 mutations: ${killed}/${MUTATIONS_038.length} killed, each on its named check`);
 }

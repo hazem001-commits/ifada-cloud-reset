@@ -22,12 +22,16 @@ import ArtifactTile from './ArtifactTile';
 import { markOpened, readOpened } from './viewerMarks';
 import {
   buildEntries,
+  producedSources,
+  withCustody,
   SECTION_META,
   SECTION_ORDER,
   type CaseFileEntry,
   type EvidenceSource,
 } from './caseFileModel';
 import { useCasePresentation } from '@/cases/CaseContext';
+import type { RuntimeProvenanceRow } from '@/types/runtime';
+import { usePlay } from '../play/PlayContext';
 import s from './casefile.module.css';
 
 function prefersReducedMotion(): boolean {
@@ -47,9 +51,10 @@ export default function CaseFile({
   privateEvidence?: readonly string[];
 }) {
   // هوية/مصدر مدخلات العناصر من عرض القضية الحالية فقط.
-  const { objectProfiles } = useCasePresentation();
+  const { objectProfiles, opening } = useCasePresentation();
   const [objects, setObjects] = useState<InvestigationObject[]>([]);
   const [sources, setSources] = useState<EvidenceSource[]>([]);
+  const [custodyRows, setCustodyRows] = useState<RuntimeProvenanceRow[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [pinned, setPinned] = useState<Set<string>>(new Set());
   const [opened, setOpened] = useState<Set<string>>(() => readOpened(sessionId));
@@ -69,14 +74,17 @@ export default function CaseFile({
 
   const load = useCallback(async () => {
     const supabase = createClient();
-    const [{ data }, pins, prov] = await Promise.all([
+    const [{ data }, pins, prov, custodyRows] = await Promise.all([
       supabase.rpc('investigation_object_index', { p_session: sessionId }),
       readBoardPins(sessionId),
       supabase.rpc('evidence_provenance', { p_session: sessionId }),
+      // سلسلة العهدة لما أنتجه العالم (037؛ عقد أراها فقط، بلا معرّف قاعدة). غيابها = بلا عهدة.
+      supabase.rpc('runtime_provenance', { p_session: sessionId }),
     ]);
     const nextObjects = (data ?? []) as InvestigationObject[];
     // قبل تطبيق 025 الدالة غير موجودة → بدون مصادر (سلوك المرحلة 3 نفسه).
-    const nextSources = prov.error ? [] : ((prov.data ?? []) as EvidenceSource[]);
+    const recorded = prov.error ? [] : ((prov.data ?? []) as EvidenceSource[]);
+    const nextSources = [...recorded, ...producedSources(nextObjects, opening?.produces, recorded)];
     if (prov.error && prov.error.code !== 'PGRST202' && prov.error.code !== '42883') {
       setError(translateInteractionError(prov.error.message));
     }
@@ -88,6 +96,7 @@ export default function CaseFile({
 
     setObjects(nextObjects);
     setSources(nextSources);
+    setCustodyRows(custodyRows.error ? [] : ((custodyRows.data ?? []) as RuntimeProvenanceRow[]));
     pinIdsRef.current = pins.itemIds;
     setPinned(pins.codes);
     setReviewed(new Set(current.filter((e) => isReviewed(sessionId, e.code)).map((e) => e.code)));
@@ -115,7 +124,7 @@ export default function CaseFile({
       }
     }
     setLoaded(true);
-  }, [sessionId, objectProfiles]);
+  }, [sessionId, objectProfiles, opening]);
 
   useEffect(() => {
     evidenceRef.current = evidence;
@@ -147,7 +156,9 @@ export default function CaseFile({
     );
   }, [sessionId, load]);
 
-  const entries = buildEntries(evidence, objects, sources, objectProfiles, privateEvidence);
+  const play = usePlay();
+  const names = new Map((play?.members ?? []).map((m) => [m.userId, m.displayName]));
+  const entries = withCustody(buildEntries(evidence, objects, sources, objectProfiles, privateEvidence), opening?.custody, custodyRows, names);
   const order = (e: CaseFileEntry) => arrival[e.revisionKey] ?? Number.MAX_SAFE_INTEGER;
   const newestFirst = [...entries].sort((x, y) => order(y) - order(x));
   const hero = newestFirst.find((e) => !opened.has(e.revisionKey)) ?? newestFirst[0];

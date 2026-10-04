@@ -23,6 +23,7 @@
   display: grid;
   gap: 0.05rem;
   min-width: 0;
+  overflow: hidden;
 }
 
 .caseTitle {
@@ -71,6 +72,9 @@
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
+  /* حافة نهاية السطر (يسار RTL) تتلاشى: تبويبات مخفية تُلمَّح، لا تُقصّ */
+  mask-image: linear-gradient(to left, transparent, #000 2rem);
+  -webkit-mask-image: linear-gradient(to left, transparent, #000 2rem);
 }
 
 .group {
@@ -199,6 +203,32 @@
 
   .tab {
     min-height: 2.75rem;
+  }
+}
+
+/* الهاتف: الهوية + الفريق + الصوت بصف واحد بلا تداخل؛ الصوت مضغوط. */
+@media (max-width: 600px) {
+  .bar {
+    gap: var(--sp-3);
+  }
+
+  .aside {
+    gap: var(--sp-2);
+  }
+
+  /* التخصصات معروضة في الفريق والبلاغ؛ هنا تتنحّى لمكان النبضة */
+  .specs {
+    display: none;
+  }
+
+  .aside :global(.case-voice .btn) {
+    min-height: 2.25rem;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.72rem;
+    max-width: 7.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 

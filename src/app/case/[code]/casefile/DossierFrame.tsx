@@ -135,6 +135,13 @@ export default function DossierFrame({
             </div>
           )}
 
+          {entry.custodian && (
+            <div className={d.railBlock}>
+              <span className={d.railLabel}>العهدة</span>
+              <p className={d.railValue}>أدخلها إلى سجل الفريق: {entry.custodian}</p>
+            </div>
+          )}
+
           <div className={d.railBlock}>
             <span className={d.railLabel}>الحالة</span>
             <EntryTags entry={entry} unopened={false} reviewed={reviewed} pinned={pinned} />

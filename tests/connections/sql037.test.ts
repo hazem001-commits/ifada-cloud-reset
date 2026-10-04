@@ -215,12 +215,11 @@ test('verifiers are read-only single SELECTs', () => {
   }
 });
 
-test('MIGRATIONS.md lists 037 as REVIEW ONLY — NOT APPLIED and never claims it is live', () => {
+test('MIGRATIONS.md records 037 as applied live (by Hazem) and never to be re-run', () => {
   const row = MIG.split('\n').find((l) => l.startsWith('| 37 |'));
   assert.ok(row, '037 row present');
-  assert.match(row!, /REVIEW ONLY — NOT APPLIED/);
-  assert.ok(!/APPLIED \+ VERIFIED/.test(row!));
-  assert.match(MIG, /`037` is \*\*not\*\* applied/);
+  assert.match(row!, /APPLIED LIVE \+ VERIFIED/);
+  assert.match(row!, /never re-run/);
 });
 
 // ------------------------------------------------------------

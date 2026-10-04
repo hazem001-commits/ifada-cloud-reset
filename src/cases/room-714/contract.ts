@@ -33,7 +33,9 @@ export const ROOM_714_CONTRACT: CaseContract = {
     intentRouter: true,
     boundedInterrogation: true,
   },
-  // البنية جاهزة (sql/037 قيد المراجعة). لا قواعد معتمدة لغرفة 714 بعد —
-  // المحرك خامل حتى تُعتمد قواعدها (RESET-2/4)، والمسار الحالي لا يتغير.
+  // المحرك (sql/037) مطبّق. قواعد الافتتاحية في sql/038 (قيد المراجعة):
+  // قبل تطبيقها يبقى المحرك خاملاً لهذه القضية والواجهة تعمل بدونه.
   runtime: { engine: true, pulse: true, gatedPlaces: true },
+  // RESET-2: الأدلة تُكتشف بالعالم — لا قائمة "الأدلة القديمة" للشراء.
+  worldDiscoveryOnly: true,
 };

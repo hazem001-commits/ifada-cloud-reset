@@ -9,7 +9,7 @@
 // ============================================================
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { subscribeAuthenticated } from '@/lib/supabase/realtime';
 import { isRuntimeNotInstalled, parseRuntimeState } from '@/lib/runtime/projection';
@@ -31,6 +31,9 @@ export function useRuntimeState(sessionId: string, enabled: boolean): RuntimeVie
   const [error, setError] = useState<string | null>(null);
   // آخر طلب فقط يكتب الحالة: رد قديم وصل متأخراً لا يطغى على أحدث.
   const seq = useRef(0);
+  // قناة لكل مستهلك: supabase.channel(name) يعيد قناة قائمة بنفس الاسم،
+  // وإضافة مستمع لقناة مشتركة بعد subscribe() ترمي خطأ (المفتش + سياق اللعب).
+  const instance = useId();
 
   const reload = useCallback(async () => {
     const mine = ++seq.current;
@@ -73,7 +76,7 @@ export function useRuntimeState(sessionId: string, enabled: boolean): RuntimeVie
     if (!enabled || installed !== true) return;
     return subscribeAuthenticated(
       createClient(),
-      `runtime:${sessionId}`,
+      `runtime:${sessionId}:${instance}`,
       (channel) => {
         for (const table of RUNTIME_SIGNAL_TABLES) {
           channel.on('postgres_changes', { event: '*', schema: 'public', table, filter: `session_id=eq.${sessionId}` }, () => void reload());
@@ -82,7 +85,7 @@ export function useRuntimeState(sessionId: string, enabled: boolean): RuntimeVie
       },
       () => void reload(),
     );
-  }, [enabled, installed, sessionId, reload]);
+  }, [enabled, installed, sessionId, reload, instance]);
 
   const shareLead = useCallback(
     async (lead: string) => {

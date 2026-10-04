@@ -681,6 +681,13 @@
   animation: surfaceIn 520ms var(--ease-power2) backwards;
 }
 
+/* الهاتف: زر الخيوط يطفو أسفل المشهد — آخر عنصر يبقى فوقه قابلاً للمس */
+@media (max-width: 759px) {
+  .surface {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 4.5rem);
+  }
+}
+
 @keyframes surfaceIn {
   from {
     opacity: 0;

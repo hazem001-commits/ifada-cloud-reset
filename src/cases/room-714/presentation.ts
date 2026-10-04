@@ -5,7 +5,7 @@
 // مخفية، وكل المفاتيح هنا ضمن نطاق هذه القضية وحدها.
 // (نُقلت كما هي من sceneGeometry.ts / objectViews.ts / caseFileModel.ts)
 // ============================================================
-import type { CasePresentation, ObjectProfile } from '../presentation';
+import type { CasePresentation, ObjectProfile, OpeningPresentation } from '../presentation';
 
 // ------------------------------------------------------------
 // المشاهد المعتمدة. المفتاح = كود الموقع بـ investigation_objects.
@@ -100,10 +100,52 @@ const OBJECT_PROFILES: Record<string, Record<string, ObjectProfile>> = {
   },
 };
 
+// ------------------------------------------------------------
+// الافتتاحية (RESET-2). النصوص من الكتالوج العام للقضية (العنوان، اسم
+// المفقود، التصنيف) ومن البلاغ نفسه (V-01 يقرؤه صاحبه فقط). خرائط
+// التسليم/الإنتاج مرآة لتفاعلات sql/038 (tests/play/openingMirror.test.ts).
+// ------------------------------------------------------------
+const OPENING: OpeningPresentation = {
+  briefing: {
+    evidence: 'V-01',
+    kicker: 'بلاغ شخص مفقود',
+    premise: 'رامي الخطيب مفقود. غرفته في الفندق، 714، أول ما ستراه.',
+    enter: 'ادخل الغرفة 714',
+  },
+  capabilities: {
+    field: 'تلاحظ كل ما في الغرفة، وتفحص المكان بعين المحقق.',
+    forensics: 'تلاحظ الآثار المادية، تجمع العيّنات وترسلها للمختبر.',
+    digital: 'تلاحظ الأجهزة والأبواب، وتستخرج ما تحفظه أنظمتها.',
+    records: 'تلاحظ الوثائق والمقتنيات، وتستعلم في سجلات الفندق.',
+  },
+  handoffs: {
+    LAPTOP: { DISCOVERED: 'digital', INSPECTED: 'digital' },
+    PASSPORT: { DISCOVERED: 'records' },
+    BLOOD_STAIN: { DISCOVERED: 'forensics', SAMPLE_COLLECTED: 'forensics' },
+    DOOR_714: { DISCOVERED: 'digital' },
+  },
+  produces: {
+    LAPTOP: { DRAFT_RECOVERED: 'D-01' },
+    PASSPORT: { RECORDS_QUERIED: 'R-01' },
+    BLOOD_STAIN: { ANALYZED: 'F-02' },
+  },
+  custody: {
+    'V-01': 'البلاغ الذي فتح القضية',
+    'D-01': 'استُخرجت من لابتوب الضحية بفحص تقني',
+    'R-01': 'نتيجة استعلام في سجلات نزلاء الفندق بعد فحص الجواز',
+    'F-02': 'تقرير المختبر لعيّنة أُخذت من الأثر قرب الكأس',
+    'F-01': 'أُعدّ حين وثّق الفريق كل ما في الغرفة',
+  },
+  leadPointers: {
+    L714_ROOM: { kind: 'object', code: 'ROOM_714', label: 'الغرفة نفسها' },
+  },
+};
+
 export const ROOM_714_PRESENTATION: CasePresentation = {
   scenes: SCENES,
   objectViews: OBJECT_VIEWS,
   objectProfiles: OBJECT_PROFILES,
   // لوحة غرفة 714 حرة: إعادة بناء الحركة تعيش بسطحها الخاص (المرحلة 8).
   boardLanes: [],
+  opening: OPENING,
 };

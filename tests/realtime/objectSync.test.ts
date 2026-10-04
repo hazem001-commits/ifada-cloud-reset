@@ -253,7 +253,9 @@ test('InvestigationEngine: one session channel, signal → gate → investigatio
 
 test('InvestigationEngine: existing interaction behaviour unchanged; the team signal only follows a SUCCESSFUL action', () => {
   assert.match(ENGINE, /rpc\('execute_object_interaction', \{\s*p_session: sessionId,\s*p_object_code: objectCode,\s*p_interaction: interactionCode,\s*\}\);\s*if \(rpcError\) flashError\(translateInteractionError\(rpcError\.message\)\);\s*else await reloadAndSignal\(\);/);
-  assert.match(ENGINE, /rpc\('share_object_discovery', \{\s*p_session: sessionId,\s*p_object_code: objectCode,\s*\}\);\s*if \(rpcError\) flashError\(translateInteractionError\(rpcError\.message\)\);\s*else await reloadAndSignal\(\);/);
+  // share: my private ancestor chain first, then the object; the team is signalled only if every share succeeded
+  assert.match(ENGINE, /for \(const code of \[\.\.\.privateAncestors\(objects, objectCode\)\.map\(\(o\) => o\.code\), objectCode\]\) \{\s*const \{ error: rpcError \} = await supabase\.rpc\('share_object_discovery', \{ p_session: sessionId, p_object_code: code \}\);\s*if \(rpcError\) \{\s*flashError\(translateInteractionError\(rpcError\.message\)\);\s*failed = true;\s*break;/);
+  assert.match(ENGINE, /if \(!failed\) await reloadAndSignal\(\);/);
   assert.match(ENGINE, /onChallengeSolved=\{\(\) => void reloadAndSignal\(\)\}/);
   assert.match(ENGINE, /await supabase\.rpc\('open_investigation', \{ p_session: sessionId \}\);\s*await load\(\);/);
   assert.match(ENGINE, /signalObjectsChanged\(channelRef\.current, sessionId\)/);

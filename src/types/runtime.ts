@@ -7,7 +7,7 @@
 
 /** runtime_state(p_session) → jsonb */
 export interface RuntimeStateRpc {
-  leads: { lead: string; label: string; status: string; shared: boolean; mine: boolean; opened_at: string }[];
+  leads: { lead: string; label: string; status: string; shared: boolean; mine: boolean | null; opened_at: string }[];
   world: { state: string; headline: string; reached_at: string }[];
   places: { code: string; title: string; category: string; shared: boolean }[];
   /** أعمدة آمنة فقط (session_pulses). */

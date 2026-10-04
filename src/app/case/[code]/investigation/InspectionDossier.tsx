@@ -12,6 +12,11 @@ import { useEffect, useRef } from 'react';
 import type { Specialization } from '@/types/database';
 import type { InvestigationObject, ObjectWorkspace } from '@/types/investigationObjects';
 import type { InvestigationChallenge } from '@/types/challenges';
+import type { EvidenceItem } from '@/types/case';
+import HandoffNote, { useHandoffNames } from '../play/HandoffNote';
+import NoticeAction from '../play/NoticeAction';
+import { producedBy } from '@/lib/play/model';
+import { useCasePresentation } from '@/cases/CaseContext';
 import { CATEGORY_LABEL, isMineOrShared, isRedactedToMe, objectStatus, type StatusTone } from './labels';
 import WorkstationLane from './WorkstationLane';
 import ChallengeConsole from './ChallengeConsole';
@@ -38,8 +43,10 @@ export default function InspectionDossier({
   object,
   workspace,
   challenges,
+  evidence,
   locationTitle,
   parent,
+  sharesWith = [],
   discoveries,
   readyCodes,
   pinned,
@@ -56,9 +63,13 @@ export default function InspectionDossier({
   object: InvestigationObject;
   workspace: ObjectWorkspace | null;
   challenges: InvestigationChallenge[];
+  /** ملف القضية كما يراه اللاعب (evidence_index بعد سياسة القضية). */
+  evidence: readonly EvidenceItem[];
   locationTitle: string;
   /** الأصل لو كان هذا اكتشافاً فرعياً. */
   parent: InvestigationObject | null;
+  /** أصول خاصة بي تُشارك معه (عناوين) — الفريق لا يرى الابن بلا أصله. */
+  sharesWith?: string[];
   /** اكتشافات فرعية ظاهرة لي تحت هذا العنصر (كما رجعت من السيرفر). */
   discoveries: InvestigationObject[];
   readyCodes: ReadonlySet<string>;
@@ -83,10 +94,27 @@ export default function InspectionDossier({
   const toolActions = new Set(
     workspace?.kind === 'device' ? workspace.files.map((f) => f.action).filter((a): a is string => !!a) : [],
   );
-  const lanes = SPEC_ORDER.map((spec) => ({
-    spec,
-    actions: object.actions.filter((a) => a.spec === spec && !toolActions.has(a.code)),
-  })).filter((l) => l.actions.length > 0);
+  // عنصر لم يُكتشف بعد: إجراءاته كلها أفعال ملاحظة — إيماءة واحدة
+  // (نفس الفعل قد يصل بنسخة لكل تخصص أملكه؛ لا يتكرر كزرّين).
+  const noticing = !object.discovered && object.actions.length > 0;
+  const seenLabels = new Set<string>();
+  const lanes = noticing
+    ? []
+    : SPEC_ORDER.map((spec) => ({
+        spec,
+        actions: object.actions.filter((a) => {
+          if (a.spec !== spec || toolActions.has(a.code)) return false;
+          const key = a.label;
+          if (seenLabels.has(key)) return false;
+          seenLabels.add(key);
+          return true;
+        }),
+      })).filter((l) => l.actions.length > 0);
+  const handoffTo = useHandoffNames(object);
+  const { opening } = useCasePresentation();
+  // المادة التي أنتجها هذا الفحص وصلت ملف القضية: هي الخاتمة — لا رسائل "جاهز/لا خطوة" فوقها.
+  const producedCode = producedBy(opening, object.code, object.state);
+  const filed = !!producedCode && evidence.some((e) => e.code === producedCode);
 
   const ready = readyCodes.has(object.code);
   const status = objectStatus(object, ready);
@@ -94,7 +122,7 @@ export default function InspectionDossier({
   const redacted = isRedactedToMe(object);
   const canShare = object.discovered && !redacted;
   const canPinToBoard = isMineOrShared(object) && object.category !== 'archive';
-  const hasTools = workspace !== null || challenges.length > 0 || lanes.length > 0;
+  const hasTools = workspace !== null || challenges.length > 0 || lanes.length > 0 || noticing;
   const privateMine = status.tone === 'private';
 
   return (
@@ -163,7 +191,7 @@ export default function InspectionDossier({
           </div>
         )}
 
-        {ready && !object.processing && (
+        {ready && !object.processing && !filed && (
           <p className={d.ready} role="status">
             <IconCheck size={15} />
             النتيجة جاهزة — تظهر في ملاحظة الفحص أعلاه.
@@ -171,7 +199,20 @@ export default function InspectionDossier({
         )}
 
         {/* ---------- قرار المشاركة ---------- */}
-        {canShare && <ShareAction shared={object.is_shared} busy={busy} needsHandoff={!hasTools} onShare={onShare} />}
+        {noticing && <NoticeAction action={object.actions[0]!} busy={busy} onAction={onAction} />}
+
+        {canShare && (
+          <ShareAction
+            shared={object.is_shared}
+            busy={busy}
+            handoffTo={handoffTo}
+            recordPending={!!producedCode}
+            withParents={sharesWith}
+            onShare={onShare}
+          />
+        )}
+
+        <HandoffNote object={object} evidence={evidence} onOpenEvidence={onOpenEvidence} />
 
         {/* ---------- اكتشافات فرعية داخل هذا الموضع ---------- */}
         {discoveries.length > 0 && (
@@ -201,7 +242,7 @@ export default function InspectionDossier({
         )}
 
         {/* ---------- أدوات المختص ---------- */}
-        {hasTools && (
+        {hasTools && !noticing && (
           <section className={d.section} aria-labelledby="dossier-tools">
             <h3 id="dossier-tools" className={d.sectionLabel}>
               أدوات الفحص
@@ -252,7 +293,7 @@ export default function InspectionDossier({
         )}
 
         {/* ---------- تسليم هادئ: لا أداة لتخصصي هنا (ليس خطأ) ---------- */}
-        {!hasTools && !privateMine && !object.processing && (
+        {!hasTools && !privateMine && !object.processing && !filed && (
           <div className={d.handoff}>
             {redacted ? (
               <p className={d.handoffText}>الأدوات تظهر هنا بعد أن يشارك زميلك ما وجده.</p>

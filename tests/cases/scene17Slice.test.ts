@@ -167,7 +167,8 @@ test('REAL: contract — still development; only the slice systems; tabs gated; 
   assert.equal(s!.status, 'development');
   const tabs = ['investigation', 'casefile', 'board', 'evidence', 'interrogation', 'reconstruction', 'hearing'] as const;
   assert.deepEqual(tabs.filter((t) => caseTabEnabled(t, s)), ['investigation', 'casefile', 'board', 'evidence']);
-  assert.deepEqual(tabs.filter((t) => caseTabEnabled(t, r)), [...tabs], 'Room 714 keeps every tab');
+  // RESET-2: Room 714 keeps every tab except the legacy "old evidence" unlock list (evidence is discovered in the world)
+  assert.deepEqual(tabs.filter((t) => caseTabEnabled(t, r)), tabs.filter((t) => t !== 'evidence'), 'Room 714 keeps every tab but the legacy archive');
   assert.equal(investigationTabLabel(s), 'اسأل التحقيق', 'no fake "place" for a case without a scene');
   assert.equal(investigationTabLabel(r), 'المكان');
   const pres = JSON.stringify(getCasePresentation('scene-17'));

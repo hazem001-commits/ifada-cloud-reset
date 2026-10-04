@@ -17,6 +17,24 @@ export function isMineOrShared(object: InvestigationObject): boolean {
   return object.discovered && object.state !== 'HIDDEN';
 }
 
+/** اكتشافي الخاص غير المشارك (لا زميل، لا مشترك). */
+export const isPrivateMine = (o: InvestigationObject) => o.discovered && !o.is_shared && o.state !== 'HIDDEN';
+
+/**
+ * أصول عنصر (عدا الموقع) هي اكتشافاتي الخاصة غير المشاركة — من الأعلى للأسفل.
+ * مشاركة الابن وحده لا تكفي: الفريق لا يرى عنصراً أصله خاص بي (026).
+ */
+export function privateAncestors(objects: readonly InvestigationObject[], code: string): InvestigationObject[] {
+  const byCode = new Map(objects.map((o) => [o.code, o]));
+  const chain: InvestigationObject[] = [];
+  let cur = byCode.get(code)?.parent_code ? byCode.get(byCode.get(code)!.parent_code!) : undefined;
+  for (let depth = 0; cur && cur.category !== 'location' && depth < 8; depth += 1) {
+    if (isPrivateMine(cur)) chain.unshift(cur);
+    cur = cur.parent_code ? byCode.get(cur.parent_code) : undefined;
+  }
+  return chain;
+}
+
 // ------------------------------------------------------------
 // لغة الحالة الموحّدة: نغمة + تسمية قصيرة + تلميح. كلها مشتقة من
 // أعلام حقيقية رجعت من السيرفر (discovered / is_shared / processing /
@@ -35,7 +53,7 @@ export function objectStatus(object: InvestigationObject, ready = false): Object
   if (!object.discovered) {
     return object.actions.length > 0
       ? { tone: 'idle', label: 'متاح للتحقيق', hint: 'لم يفحصه أحد بعد، وتستطيع البدء' }
-      : { tone: 'idle', label: 'لم يُفحص بعد', hint: 'لم يفحصه أحد بعد' };
+      : { tone: 'idle', label: 'خارج ملاحظتك', hint: 'لا شيء هنا تلتقطه عينك — قد يلاحظ زميلك ما يفوتك' };
   }
   if (isRedactedToMe(object)) {
     return { tone: 'teammate', label: 'لدى زميل', hint: 'زميل اكتشف شيئاً هنا ولم يشاركه بعد' };
