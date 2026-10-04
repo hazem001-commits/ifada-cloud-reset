@@ -157,6 +157,30 @@ export function frameObject(
   return { scale, tx, ty };
 }
 
+export interface DossierLayout {
+  mode: 'side' | 'sheet';
+  size: number;
+  /** الجزء غير المغطّى من المشهد. */
+  visible: Rect;
+  /** حيث يُوضع الجسم المفحوص (المكشوف ناقص هامش). */
+  free: Rect;
+}
+
+/** ملف الفحص: عمود جانبي من بداية السطر (اليمين)، أو ورقة سفلية بالشاشات الضيقة. */
+export function dossierLayout(view: Size, wide: boolean): DossierLayout {
+  if (view.width < 760) {
+    // أطول قليلاً على الشاشات القصيرة: الفعل الأساسي (لاحظ/سلّم) ظاهر بلا تمرير.
+    const size = Math.round(view.height * (view.height < 720 ? 0.66 : 0.6));
+    const visible: Rect = { x0: 0, x1: view.width, y0: 0, y1: view.height - size };
+    return { mode: 'sheet', size, visible, free: { x0: 16, x1: view.width - 16, y0: 16, y1: visible.y1 - 16 } };
+  }
+  const size = wide
+    ? Math.round(clamp(view.width * 0.4, 384, 544))
+    : Math.round(clamp(view.width * 0.3, 352, 424));
+  const visible: Rect = { x0: 0, x1: view.width - size, y0: 0, y1: view.height };
+  return { mode: 'side', size, visible, free: { x0: 32, x1: visible.x1 - 32, y0: 40, y1: view.height - 40 } };
+}
+
 /** حدود النقر: الجسم نفسه، بحد أدنى 44px على الشاشة حول مركزه. */
 export function hitBox(box: Box, scale: number, minScreenPx = 44): Box {
   const min = minScreenPx / Math.max(scale, 0.01);

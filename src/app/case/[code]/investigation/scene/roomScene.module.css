@@ -531,6 +531,31 @@
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.85);
 }
 
+/* اللمس بلا مؤشر: التلميح يقول "المس"، لا "مرّر" */
+.hintTouch {
+  display: none;
+}
+
+@media (hover: none) {
+  .hintPointer {
+    display: none;
+  }
+
+  .hintTouch {
+    display: inline;
+  }
+}
+
+/* الهاتف: الهامش (مدخل "خارج إطار الصورة" مثل الباب) فوق زر الخيوط العائم
+   وفوق safe-area — لا يقع أي مدخل تحت عنصر آخر */
+@media (max-width: 759px) {
+  .margin {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 4.5rem);
+    inset-inline-start: 1rem;
+    max-width: none;
+  }
+}
+
 .unplaced {
   display: grid;
   margin: 0;

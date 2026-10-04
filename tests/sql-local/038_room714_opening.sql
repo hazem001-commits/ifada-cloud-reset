@@ -51,20 +51,22 @@ select rt_test.ok((select count(*) from session_pulses where session_id = :S) = 
 select rt_test.ok(not exists (select 1 from session_object_state where session_id = :S and object_code = 'SECURITY_OFFICE'), 'security office (gated) never seeded');
 select rt_test.ok(not exists (select 1 from session_events where session_id = :S), 'no broadcast at arrival');
 
--- every player can notice something; nobody can transform what they cannot
+-- EVERYONE INVESTIGATES: every player can notice every ordinary thing in
+-- the room; specialization decides what they can DO with it, not what they see
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-4000-8000-0000000007a1';
 select rt_test.ok(not exists (select 1 from investigation_object_index(:S) where code in ('SECURITY_OFFICE', 'CCTV_ARCHIVE')), 'P: no security office, no CCTV archive, no breadcrumb');
-set request.jwt.claim.sub = '00000000-0000-4000-8000-0000000007b2';
-select rt_test.ok(not exists (select 1 from investigation_object_index(:S) where code in ('SECURITY_OFFICE', 'CCTV_ARCHIVE')), 'Q: no security office, no CCTV archive, no breadcrumb');
-select rt_test.ok((select array_agg(code order by code) from investigation_object_index(:S) where jsonb_array_length(actions) > 0)
-                  = array['DOOR_714', 'LAPTOP', 'VICTIM_ITEMS'], 'Q (digital+records) can notice the device, the door and the belongings');
-select rt_test.ok(not exists (select 1 from investigation_object_index(:S) where code in ('GLASS_CUP', 'OPEN_WINDOW') and jsonb_array_length(actions) > 0), 'Q cannot notice the physical traces');
-set request.jwt.claim.sub = '00000000-0000-4000-8000-0000000007a1';
 select rt_test.ok((select count(*) from investigation_object_index(:S) where jsonb_array_length(actions) >= 1 and code in ('GLASS_CUP','OPEN_WINDOW','VICTIM_ITEMS','LAPTOP','DOOR_714')) = 5,
-                  'P (field) can notice everything');
+                  'P (field+forensics) can notice everything in the room, the laptop and the door included');
 select rt_test.ok((select count(distinct a ->> 'label') from investigation_object_index(:S), jsonb_array_elements(actions) a where code = 'GLASS_CUP') = 1,
                   'a noticing act is ONE gesture: the variants per specialization share one label (the UI shows one)');
+set request.jwt.claim.sub = '00000000-0000-4000-8000-0000000007b2';
+select rt_test.ok(not exists (select 1 from investigation_object_index(:S) where code in ('SECURITY_OFFICE', 'CCTV_ARCHIVE')), 'Q: no security office, no CCTV archive, no breadcrumb');
+select rt_test.ok((select count(*) from investigation_object_index(:S) where jsonb_array_length(actions) >= 1 and code in ('GLASS_CUP','OPEN_WINDOW','VICTIM_ITEMS','LAPTOP','DOOR_714')) = 5,
+                  'Q (digital+records) can notice everything in the room, the glass and the window included — nobody is blind by specialization');
+select rt_test.ok(not exists (select 1 from investigation_object_index(:S), jsonb_array_elements(actions) a
+                              where code in ('GLASS_CUP','OPEN_WINDOW','VICTIM_ITEMS','LAPTOP','DOOR_714') and a ->> 'code' !~ '^INSPECT'),
+                  'before anything is found, the only act on offer is noticing (no transformation shortcut)');
 reset role;
 
 -- ------------------------------------------------------------
@@ -157,6 +159,11 @@ set request.jwt.claim.sub = '00000000-0000-4000-8000-0000000007b2';
 select public.execute_object_interaction(:S, 'DOOR_714', 'INSPECT_DIGITAL');
 select rt_test.ok(not exists (select 1 from challenge_index(:S) where code = 'DOOR_LOG_QUERY'), 'a material-producing tool waits for the find to be on record');
 select public.share_object_discovery(:S, 'DOOR_714');
+-- the window is the player's: too wide (> 90 min) is a neutral miss that reveals nothing
+select rt_test.ok((select r ->> 'outcome' = 'too_broad' and r::text !~ '(1423|1446|23:43|00:06|D-02)'
+                   from public.run_challenge(:S, 'DOOR_LOG_QUERY', '{"from":"22:30","to":"01:00"}'::jsonb) as t(r)),
+                  'a window wider than 90 minutes is a neutral too-broad miss (no authored time, no evidence code)');
+select rt_test.ok(not exists (select 1 from rt_test.my_evidence(:S) where code = 'D-02'), 'the too-broad query produced nothing');
 select (public.run_challenge(:S, 'DOOR_LOG_QUERY', '{"from":"23:30","to":"00:30"}'::jsonb)) ->> 'outcome';
 reset role;
 select rt_test.ok(exists (select 1 from session_evidence se join evidence e on e.id = se.evidence_id where se.session_id = :S and e.code = 'D-02'), 'the access log was pulled');
@@ -253,7 +260,8 @@ reset role;
 select rt_test.ok((select p = (select count(*) from session_pulses where session_id = :S) and f = (select count(*) from session_runtime_firings where session_id = :S)
                      and e = (select count(*) from session_evidence where session_id = :S) from op_snap), 'opening is idempotent');
 
--- another split: forensics + records can also notice (P2 = forensics, Q2 = records)
+-- another split (P2 = forensics only, Q2 = records only): the same world for
+-- both; each can notice anything, and only transform what their capability allows
 \set S2 '\'00000000-0000-4000-8000-000000000715\''
 insert into public.sessions (id, case_id, code, host_id, status, started_at) values (:S2, 'room-714', 'RT0715', :P, 'active', now());
 insert into public.session_members (session_id, user_id, specialization, is_host) values (:S2, :P, 'forensics', true), (:S2, :Q, 'records', false);
@@ -264,11 +272,29 @@ set request.jwt.claim.sub = '00000000-0000-4000-8000-0000000007a1';
 select public.open_investigation(:S2);
 select public.execute_object_interaction(:S2, 'GLASS_CUP', 'INSPECT_FORENSICS');
 select public.execute_object_interaction(:S2, 'BLOOD_STAIN', 'INSPECT_CLOSE_FORENSICS');
+select rt_test.ok(exists (select 1 from investigation_object_index(:S2), jsonb_array_elements(actions) a where code = 'BLOOD_STAIN' and a ->> 'code' = 'COLLECT_SAMPLE'),
+                  'forensics sees the stain AND that it deserves collection');
+select public.share_object_discovery(:S2, 'GLASS_CUP');
+select public.share_object_discovery(:S2, 'BLOOD_STAIN');
+-- forensics notices the laptop too — but cannot extract anything from it
+select public.execute_object_interaction(:S2, 'LAPTOP', 'INSPECT_FORENSICS');
+select rt_test.ok((select state = 'DISCOVERED' and jsonb_array_length(actions) = 0 from investigation_object_index(:S2) where code = 'LAPTOP'),
+                  'forensics noticed the laptop; device inspection / draft recovery stay digital');
 set request.jwt.claim.sub = '00000000-0000-4000-8000-0000000007b2';
 select public.open_investigation(:S2);
 select public.execute_object_interaction(:S2, 'VICTIM_ITEMS', 'INSPECT_RECORDS');
-select rt_test.ok(not exists (select 1 from investigation_object_index(:S2) where code = 'LAPTOP' and jsonb_array_length(actions) > 0), 'without field/digital nobody fakes a laptop exam');
+-- records sees the shared stain: a stain, nothing to collect
+select rt_test.ok((select jsonb_array_length(actions) = 0 from investigation_object_index(:S2) where code = 'BLOOD_STAIN'),
+                  'records sees the stain but cannot collect or send it to the lab');
+-- records notices the door — the access-log query stays digital
+select public.execute_object_interaction(:S2, 'DOOR_714', 'INSPECT_RECORDS');
+select public.share_object_discovery(:S2, 'DOOR_714');
+select rt_test.ok(not exists (select 1 from challenge_index(:S2) where code = 'DOOR_LOG_QUERY'), 'records noticed the door; the access-log query is not theirs');
+select rt_test.ok((select state = 'HIDDEN' and jsonb_array_length(actions) = 0 from investigation_object_index(:S2) where code = 'LAPTOP'),
+                  'the laptop forensics noticed privately stays theirs: records sees only "a teammate has something here"');
 reset role;
-select rt_test.ok((select count(*) from session_object_state where session_id = :S2 and discovered and not is_shared) = 3, 'forensics and records players both investigate');
+select rt_test.ok((select count(*) from session_object_state where session_id = :S2 and discovered and object_code <> 'ROOM_714') = 5, 'forensics and records players both investigate the same room');
+select rt_test.ok(not exists (select 1 from session_evidence se join evidence e on e.id = se.evidence_id where se.session_id = :S2 and e.code in ('D-01', 'D-02', 'F-02')),
+                  'noticing alone produces no specialist material');
 
 select 'OPENING_OK' as result;

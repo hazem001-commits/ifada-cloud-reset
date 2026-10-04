@@ -90,19 +90,46 @@ test('design invariants of the opening rules', () => {
   assert.deepEqual((scene.conditions as { object: string }[]).map((c) => c.object).sort(), ['BLOOD_STAIN', 'GLASS_CUP', 'LAPTOP', 'OPEN_WINDOW', 'PASSPORT', 'VICTIM_ITEMS']);
 });
 
-test('noticing for everyone: each noticeable thing has a field variant + its natural specialist, one label', () => {
-  const expect: Record<string, string[]> = {
-    GLASS_CUP: ['field', 'forensics'], BLOOD_STAIN: ['field', 'forensics'], OPEN_WINDOW: ['field', 'forensics'],
-    VICTIM_ITEMS: ['field', 'records'], PASSPORT: ['field', 'records'], LAPTOP: ['digital', 'field'], DOOR_714: ['digital', 'field'],
-  };
-  for (const [code, specs] of Object.entries(expect)) {
-    const m = CODE.match(new RegExp(`set interactions = '(\\[[^']*\\])'::jsonb[^;]*?code = '${code}'`));
-    assert.ok(m, code);
-    const notices = (JSON.parse(m![1]!) as { spec: string; label: string; requires_state: string; code: string }[]).filter((i) => i.requires_state === 'UNKNOWN');
-    assert.deepEqual([...new Set(notices.map((i) => i.spec))].sort(), specs, code);
+// EVERYONE INVESTIGATES · SPECIALIZATION = CAPABILITY, NOT SIGHT.
+// The wrong specialization can notice the ordinary object, but cannot perform
+// the specialist transformation (and cannot read its restricted result — 035).
+const ALL_SPECS = ['digital', 'field', 'forensics', 'records'];
+const ORDINARY = ['GLASS_CUP', 'BLOOD_STAIN', 'OPEN_WINDOW', 'VICTIM_ITEMS', 'PASSPORT', 'LAPTOP', 'DOOR_714'];
+type Interaction = { spec: string; label: string; requires_state: string; produces_state: string; code: string };
+const interactionsOf = (code: string): Interaction[] => {
+  const blocks = CODE.split('update public.investigation_objects\n');
+  const blk = blocks.find((b) => b.includes(`and code = '${code}';`) && b.startsWith('set interactions'));
+  assert.ok(blk, code);
+  return JSON.parse(blk!.match(/set interactions = '(\[[^']*\])'::jsonb/)![1]!) as Interaction[];
+};
+
+test('everyone can notice every ordinary object in the room — one gesture, one label, distinct codes', () => {
+  for (const code of ORDINARY) {
+    const notices = interactionsOf(code).filter((i) => i.requires_state === 'UNKNOWN');
+    assert.deepEqual([...new Set(notices.map((i) => i.spec))].sort(), ALL_SPECS, `${code}: no specialization is blind to it`);
     assert.equal(new Set(notices.map((i) => i.label)).size, 1, `${code}: one gesture`);
     assert.equal(new Set(notices.map((i) => i.code)).size, notices.length, `${code}: distinct codes`);
+    for (const n of notices) assert.equal(n.produces_state, 'DISCOVERED', `${code}: noticing only discovers`);
   }
+});
+
+test('transformations stay specialist-only: noticing never grants the specialist action', () => {
+  const transforms = (code: string) => interactionsOf(code).filter((i) => i.requires_state !== 'UNKNOWN');
+  assert.deepEqual(transforms('BLOOD_STAIN').map((i) => [i.code, i.spec]), [['COLLECT_SAMPLE', 'forensics'], ['REQUEST_LAB', 'forensics']]);
+  assert.deepEqual(transforms('LAPTOP').map((i) => [i.code, i.spec]), [['INSPECT_DEVICE', 'digital'], ['RECOVER_DRAFT', 'digital']]);
+  for (const code of ['GLASS_CUP', 'OPEN_WINDOW', 'VICTIM_ITEMS', 'PASSPORT', 'DOOR_714']) assert.equal(transforms(code).length, 0, code);
+  // records lookup and the door-log query are untouched specialist challenges (025)
+  assert.doesNotMatch(CODE, /update public\.investigation_challenges\s+set (spec|input_kind|solution)/);
+});
+
+test('no artificial mutual dependency: no rule demands an input from another specialization', () => {
+  const rulesBlock = CODE.slice(CODE.indexOf('insert into public.case_runtime_rules'));
+  assert.doesNotMatch(rulesBlock, /"(spec|specialization|from_spec|other_spec)"/);
+});
+
+test('door log keeps the player-supplied ≤90-minute window and never exposes the authored range', () => {
+  assert.doesNotMatch(CODE, /DOOR_LOG_QUERY'[^;]*(max_width|targets|1423|1446)/);
+  assert.match(POST, /DOOR_LOG_QUERY[\s\S]*max_width'\)::int = 90|max_width'\)::int = 90[\s\S]*DOOR_LOG_QUERY/);
 });
 
 test('pulse categories are the fixed RESET-1 taxonomy', () => {

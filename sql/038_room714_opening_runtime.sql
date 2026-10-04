@@ -14,8 +14,8 @@
 -- 019, 025) or REMOVES detail; lead labels are questions, never answers.
 --
 -- THE OPENING (≈15–25 min, 2+ players):
---   briefing (V-01, unchanged initial) → Room 714 → everyone NOTICES,
---   each specialization notices different things → private finds pulse
+--   briefing (V-01, unchanged initial) → Room 714 → everyone NOTICES
+--   the same world, privately, in their own order → private finds pulse
 --   to the team → specialists TRANSFORM (device, records, lab, access log)
 --   → material arrives in the Case File only once the find is SHARED
 --   (team-known) → each specialist receives a PRIVATE insight lead they
@@ -23,20 +23,29 @@
 --   the room together → the chapter ends on open questions (whose blood,
 --   who used the master key) that the next chapters answer.
 --
--- 1. NOTICING IS FOR EVERYONE (capability, not content quantity).
---    Discovery interactions exist for field (the generalist) AND the
---    specialization that naturally notices that kind of thing:
---      GLASS_CUP / BLOOD_STAIN / OPEN_WINDOW  field · forensics
---      VICTIM_ITEMS / PASSPORT                field · records
---      LAPTOP / DOOR_714                      field · digital
---    Same label, distinct codes (the engine resolves an interaction by
---    code + spec). Transformations stay specialist-only.
+-- 1. EVERYONE INVESTIGATES. SPECIALIZATION = CAPABILITY, NOT SIGHT.
+--    Every ordinary visible thing in the room (glass, stain, window,
+--    belongings, passport, laptop, door) can be NOTICED by every
+--    specialization — one gesture, one label, one interaction per spec
+--    (the engine resolves an interaction by code + spec; distinct codes).
+--    Nobody is blind to an object because of their specialization.
+--    What stays specialist-only is what you can DO with it:
+--      BLOOD_STAIN  collect sample → lab analysis      forensics
+--      LAPTOP       device inspection → recover draft  digital
+--      PASSPORT     guest-file lookup (challenge)      records
+--      DOOR_714     door-log time-window query         digital
+--    and who can READ the restricted results (035 readability). Asymmetry
+--    comes from private discovery, timing, choice, transformation,
+--    restricted results, private insight leads and Pulse — never from
+--    hiding the ordinary world. No rule requires an input to originate
+--    from another player's specialization: one player holding several
+--    capabilities may use them all.
 -- 2. NO ARTIFICIAL SHARE LOCKS. requires_shared is removed from the
 --    specialist steps that produce no material (sample collection, the
 --    guest-file lookup): a specialist may work on their own private find.
 --    Tools that PRODUCE material (the door-log query → D-02) keep 025's
 --    engine rule — they run only on a find the team has on record.
---    Dependency comes from who can notice vs. who can transform, and from
+--    Dependency comes from who can transform and read what, and from
 --    material reaching the team record only when shared.
 -- 3. MATERIAL IS PRODUCED BY PLAY, NOT HANDED AT START.
 --      D-01 draft      ← LAPTOP DRAFT_RECOVERED (team-known)
@@ -79,7 +88,9 @@ where case_id = 'room-714' and status = 'approved' and rule_id like 'R714\_%';
 update public.investigation_objects
 set interactions = '[
   {"code":"INSPECT","label":"عاين","spec":"field","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
-  {"code":"INSPECT_FORENSICS","label":"عاين","spec":"forensics","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0}
+  {"code":"INSPECT_FORENSICS","label":"عاين","spec":"forensics","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
+  {"code":"INSPECT_RECORDS","label":"عاين","spec":"records","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
+  {"code":"INSPECT_DIGITAL","label":"عاين","spec":"digital","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0}
 ]'::jsonb
 where case_id = 'room-714' and code = 'GLASS_CUP';
 
@@ -87,6 +98,8 @@ update public.investigation_objects
 set interactions = '[
   {"code":"INSPECT_CLOSE","label":"افحص عن قرب","spec":"field","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
   {"code":"INSPECT_CLOSE_FORENSICS","label":"افحص عن قرب","spec":"forensics","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
+  {"code":"INSPECT_CLOSE_RECORDS","label":"افحص عن قرب","spec":"records","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
+  {"code":"INSPECT_CLOSE_DIGITAL","label":"افحص عن قرب","spec":"digital","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
   {"code":"COLLECT_SAMPLE","label":"اجمع عينة","spec":"forensics","requires_state":"DISCOVERED","produces_state":"SAMPLE_COLLECTED","processing_seconds":0},
   {"code":"REQUEST_LAB","label":"اطلب تحليل مخبري","spec":"forensics","requires_state":"SAMPLE_COLLECTED","produces_state":"PROCESSING","processing_seconds":150}
 ]'::jsonb,
@@ -97,21 +110,27 @@ where case_id = 'room-714' and code = 'BLOOD_STAIN';
 update public.investigation_objects
 set interactions = '[
   {"code":"INSPECT","label":"عاين","spec":"field","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
-  {"code":"INSPECT_FORENSICS","label":"عاين","spec":"forensics","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0}
+  {"code":"INSPECT_FORENSICS","label":"عاين","spec":"forensics","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
+  {"code":"INSPECT_RECORDS","label":"عاين","spec":"records","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
+  {"code":"INSPECT_DIGITAL","label":"عاين","spec":"digital","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0}
 ]'::jsonb
 where case_id = 'room-714' and code = 'OPEN_WINDOW';
 
 update public.investigation_objects
 set interactions = '[
   {"code":"INSPECT","label":"عاين","spec":"field","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
-  {"code":"INSPECT_RECORDS","label":"عاين","spec":"records","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0}
+  {"code":"INSPECT_FORENSICS","label":"عاين","spec":"forensics","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
+  {"code":"INSPECT_RECORDS","label":"عاين","spec":"records","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
+  {"code":"INSPECT_DIGITAL","label":"عاين","spec":"digital","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0}
 ]'::jsonb
 where case_id = 'room-714' and code = 'VICTIM_ITEMS';
 
 update public.investigation_objects
 set interactions = '[
   {"code":"INSPECT","label":"افحص جواز السفر","spec":"field","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
-  {"code":"INSPECT_RECORDS","label":"افحص جواز السفر","spec":"records","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0}
+  {"code":"INSPECT_FORENSICS","label":"افحص جواز السفر","spec":"forensics","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
+  {"code":"INSPECT_RECORDS","label":"افحص جواز السفر","spec":"records","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
+  {"code":"INSPECT_DIGITAL","label":"افحص جواز السفر","spec":"digital","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0}
 ]'::jsonb,
     state_descriptions = state_descriptions
       || '{"RECORDS_QUERIED": "وصل ملف النزيل من سجلات الفندق. نصّه محفوظ في ملف القضية."}'::jsonb
@@ -120,6 +139,8 @@ where case_id = 'room-714' and code = 'PASSPORT';
 update public.investigation_objects
 set interactions = '[
   {"code":"INSPECT","label":"عاين سطحياً","spec":"field","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
+  {"code":"INSPECT_FORENSICS","label":"عاين سطحياً","spec":"forensics","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
+  {"code":"INSPECT_RECORDS","label":"عاين سطحياً","spec":"records","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
   {"code":"INSPECT_DIGITAL","label":"عاين سطحياً","spec":"digital","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
   {"code":"INSPECT_DEVICE","label":"افحص الجهاز تقنياً","spec":"digital","requires_state":"DISCOVERED","produces_state":"INSPECTED","processing_seconds":0},
   {"code":"RECOVER_DRAFT","label":"استخرج آخر نشاط","spec":"digital","requires_state":"INSPECTED","produces_state":"DRAFT_RECOVERED","processing_seconds":0}
@@ -131,6 +152,8 @@ where case_id = 'room-714' and code = 'LAPTOP';
 update public.investigation_objects
 set interactions = '[
   {"code":"INSPECT","label":"افحص الباب","spec":"field","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
+  {"code":"INSPECT_FORENSICS","label":"افحص الباب","spec":"forensics","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
+  {"code":"INSPECT_RECORDS","label":"افحص الباب","spec":"records","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0},
   {"code":"INSPECT_DIGITAL","label":"افحص الباب","spec":"digital","requires_state":"UNKNOWN","produces_state":"DISCOVERED","processing_seconds":0}
 ]'::jsonb
 where case_id = 'room-714' and code = 'DOOR_714';

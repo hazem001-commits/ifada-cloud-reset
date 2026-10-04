@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { freshSystemPulses, handoffFor, newPulseIds, presence, producedBy, PULSE_FRESH_MS, sinceLabel, specsOf, threadGroups } from '../../src/lib/play/model';
 import { parseRuntimeState } from '../../src/lib/runtime/projection';
 import { withCustody, entryFromEvidence, producedSources } from '../../src/app/case/[code]/casefile/caseFileModel';
-import { privateAncestors } from '../../src/app/case/[code]/investigation/labels';
+import { objectStatus, privateAncestors } from '../../src/app/case/[code]/investigation/labels';
 import { ROOM_714_PRESENTATION } from '../../src/cases/room-714/presentation';
 import { ROOM_714_CONTRACT } from '../../src/cases/room-714/contract';
 import { SCENE_17_CONTRACT } from '../../src/cases/scene-17/contract';
@@ -179,6 +179,21 @@ test('Room 714 retires the legacy unlock list; Scene 17 is unchanged', () => {
   assert.match(automation, /if \(worldOnly\) return;/, 'the expiring list is not even fetched');
   const workspace = readFileSync('src/app/case/[code]/CaseWorkspace.tsx', 'utf8');
   assert.match(workspace, /worldOnly \? Promise\.resolve\(\{ data: \[\], error: null \}\) : supabase\.rpc\("unlockable_evidence"/, 'later-chapter titles never reach the browser');
+});
+
+test('everyone investigates: specialization is capability, never sight', () => {
+  // the briefing promises the same world to everyone; capability lines describe what you DO
+  for (const sp of ['field', 'forensics', 'digital', 'records'] as const) {
+    const line = OPENING.capabilities[sp];
+    assert.ok(line, sp);
+    assert.doesNotMatch(line!, /تلاحظ|ترى|لا ترى/, `${sp}: a capability line never claims exclusive sight`);
+  }
+  assert.match(readFileSync('src/app/case/[code]/play/CaseBriefing.tsx', 'utf8'), /كلكم ترون الغرفة نفسها/);
+  // noticing is never a handoff: hand-offs start only after something is found
+  for (const [code, states] of Object.entries(OPENING.handoffs)) assert.ok(!('UNKNOWN' in states), `${code}: nobody needs a teammate to notice it`);
+  // an undiscovered thing with no action for me is neutral — never "outside your notice"
+  const st = objectStatus({ code: 'X', discovered: false, actions: [] } as unknown as InvestigationObject);
+  assert.doesNotMatch(st.label + st.hint, /ملاحظتك|عينك|يفوتك/);
 });
 
 test('capability lines are capabilities, not content (no codes, names or facts)', () => {

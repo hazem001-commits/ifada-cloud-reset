@@ -53,7 +53,7 @@ export function objectStatus(object: InvestigationObject, ready = false): Object
   if (!object.discovered) {
     return object.actions.length > 0
       ? { tone: 'idle', label: 'متاح للتحقيق', hint: 'لم يفحصه أحد بعد، وتستطيع البدء' }
-      : { tone: 'idle', label: 'خارج ملاحظتك', hint: 'لا شيء هنا تلتقطه عينك — قد يلاحظ زميلك ما يفوتك' };
+      : { tone: 'idle', label: 'لم يُفحص بعد', hint: 'لا إجراء متاح لك عليه الآن' };
   }
   if (isRedactedToMe(object)) {
     return { tone: 'teammate', label: 'لدى زميل', hint: 'زميل اكتشف شيئاً هنا ولم يشاركه بعد' };

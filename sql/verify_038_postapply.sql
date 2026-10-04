@@ -2,7 +2,7 @@
 -- IFADA 038 — POST-APPLY VERIFICATION (READ-ONLY: one SELECT, no writes)
 -- Run in the Supabase SQL Editor right after applying 038 (ONLY after
 -- Hazem approves). Every row with a non-null pass must be true.
---   N — noticing for everyone (capability, not content quantity)
+--   N — everyone notices the same world; specialization = capability (transformations, readable results)
 --   M — material produced by play is runtime-only and delivered by rules
 --   B — chapter boundary (no M1 / RAMI_FOUND / RAMI_DIED / F-04 / F-07 / CCTV)
 --   L — leads + pulse taxonomy content
@@ -10,10 +10,10 @@
 --   Z — scope: nothing outside Room 714 content; 037 untouched
 -- ============================================================
 with
-notice(code, specs) as (values
-  ('GLASS_CUP', array['field', 'forensics']), ('BLOOD_STAIN', array['field', 'forensics']),
-  ('OPEN_WINDOW', array['field', 'forensics']), ('VICTIM_ITEMS', array['field', 'records']),
-  ('PASSPORT', array['field', 'records']), ('LAPTOP', array['digital', 'field']), ('DOOR_714', array['digital', 'field'])),
+notice(code, specs) as (
+  -- every ordinary visible thing: noticed by EVERY specialization (no one is blind to it)
+  select c, array['digital', 'field', 'forensics', 'records']
+  from unnest(array['GLASS_CUP', 'BLOOD_STAIN', 'OPEN_WINDOW', 'VICTIM_ITEMS', 'PASSPORT', 'LAPTOP', 'DOOR_714']) c),
 produced(code) as (values ('D-01'), ('R-01'), ('F-01'), ('F-02')),
 held(code) as (select e.code from public.evidence e where e.case_id = 'room-714'
                and e.code not in ('V-01', 'D-01', 'R-01', 'F-01', 'F-02', 'D-02')),
@@ -44,8 +44,12 @@ select check_name, pass, detail from (
          not exists (select 1 from o, jsonb_array_elements(o.interactions) i where o.code = 'BLOOD_STAIN' and (i ->> 'requires_shared')::boolean)
          and not (select requires_shared from public.investigation_challenges where case_id = 'room-714' and code = 'GUEST_FILE_LOOKUP'), null
   union all
-  select 5, 'N5 the door-log query (produces D-02) is unchanged: still on a shared find',
-         (select requires_shared from public.investigation_challenges where case_id = 'room-714' and code = 'DOOR_LOG_QUERY'), null
+  select 5, 'N5 the door-log query (produces D-02) is unchanged: digital, on a shared find, player-supplied window of at most 90 minutes',
+         (select requires_shared and spec = 'digital' and input_kind = 'time_window' and (solution ->> 'max_width')::int = 90
+          from public.investigation_challenges where case_id = 'room-714' and code = 'DOOR_LOG_QUERY'), null
+  union all
+  select 7, 'N7 no rule demands an input from another specialization (no artificial mutual dependency)',
+         not exists (select 1 from public.case_runtime_rules where case_id = 'room-714' and (conditions::text ~* '(spec|specialization)' or effects::text ~* '(spec|specialization)')), null
   union all
   select 6, 'N6 finished transformations do not repeat restricted material in the object text',
          (select state_descriptions ->> 'ANALYZED' from o where code = 'BLOOD_STAIN') !~ '(أنثى|رامي)'

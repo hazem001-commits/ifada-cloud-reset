@@ -20,10 +20,11 @@ import { useElementSize } from '../../evidence/video/useElementSize';
 import { AFFORDANCE, objectStatus } from '../labels';
 import { CategoryIcon } from '../icons';
 import {
+  dossierLayout,
   fitScene,
   frameObject,
   stageCss,
-  type Rect,
+  type DossierLayout,
   type SceneAnchor,
   type SceneDefinition,
   type Size,
@@ -38,32 +39,6 @@ import { own } from '@/cases/presentation';
 import { useCasePresentation } from '@/cases/CaseContext';
 import LocationPlaque from './LocationPlaque';
 import r from './roomScene.module.css';
-
-const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
-
-interface DossierLayout {
-  mode: 'side' | 'sheet';
-  size: number;
-  /** الجزء غير المغطّى من المشهد. */
-  visible: Rect;
-  /** حيث يُوضع الجسم المفحوص (المكشوف ناقص هامش). */
-  free: Rect;
-}
-
-/** ملف الفحص: عمود جانبي من بداية السطر (اليمين)، أو ورقة سفلية بالشاشات الضيقة. */
-function dossierLayout(view: Size, wide: boolean): DossierLayout {
-  if (view.width < 760) {
-    // أطول قليلاً على الشاشات القصيرة: الفعل الأساسي (لاحظ/سلّم) ظاهر بلا تمرير.
-    const size = Math.round(view.height * (view.height < 720 ? 0.66 : 0.6));
-    const visible: Rect = { x0: 0, x1: view.width, y0: 0, y1: view.height - size };
-    return { mode: 'sheet', size, visible, free: { x0: 16, x1: view.width - 16, y0: 16, y1: visible.y1 - 16 } };
-  }
-  const size = wide
-    ? Math.round(clamp(view.width * 0.4, 384, 544))
-    : Math.round(clamp(view.width * 0.3, 352, 424));
-  const visible: Rect = { x0: 0, x1: view.width - size, y0: 0, y1: view.height };
-  return { mode: 'side', size, visible, free: { x0: 32, x1: visible.x1 - 32, y0: 40, y1: view.height - 40 } };
-}
 
 export default function RoomScene({
   sessionId,
@@ -417,7 +392,10 @@ function PhotoScene({
             </section>
           )}
           {!explored && (
-            <p className={r.hint}>مرّر المؤشر على الغرفة، أو تنقّل بمفتاح Tab، لتلاحظ ما يستحق الفحص.</p>
+            <p className={r.hint}>
+              <span className={r.hintPointer}>مرّر المؤشر على الغرفة، أو تنقّل بمفتاح Tab، لتلاحظ ما يستحق الفحص.</span>
+              <span className={r.hintTouch}>المس ما يلفت نظرك في الغرفة لتفحصه.</span>
+            </p>
           )}
         </div>
       )}

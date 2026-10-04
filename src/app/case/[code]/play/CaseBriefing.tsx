@@ -131,7 +131,9 @@ export default function CaseBriefing({
           </ul>
         </section>
 
-        <p className={s.rule}>ما تكتشفه يبقى لك وحدك حتى تقرّر مشاركته.</p>
+        <p className={s.rule}>
+          كلكم ترون الغرفة نفسها؛ التخصص يحدد ما تستطيع فعله بما تجده. وما تكتشفه يبقى لك وحدك حتى تقرّر مشاركته.
+        </p>
 
         <button ref={enterRef} type="button" className={s.enter} onClick={onEnter}>
           {brief.enter}

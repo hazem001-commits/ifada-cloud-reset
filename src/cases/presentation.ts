@@ -54,7 +54,10 @@ export interface OpeningPresentation {
     premise: string;
     enter: string;
   };
-  /** ما يستطيع تخصصٌ ملاحظته/فعله في هذه القضية (قدرة، لا محتوى). */
+  /**
+   * ما يستطيع تخصصٌ فعله بما يجده (قدرة/تحويل). الكل يلاحظ العالم نفسه:
+   * التخصص لا يحدد ما تراه ولا كمية ما تصل إليه، بل ما تستطيع فعله به.
+   */
   capabilities: Readonly<Partial<Record<Specialization, string>>>;
   /** عنصر → حالة → التخصص الذي يكمل منها (مرآة تفاعلات/أدوات القضية). */
   handoffs: Readonly<Record<string, Readonly<Record<string, Specialization>>>>;
