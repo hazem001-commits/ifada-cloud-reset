@@ -158,12 +158,25 @@ export const objectTeamKnown = (s: RuntimeSnapshot, objectCode: string) =>
 export const objectVisibleTo = (s: RuntimeSnapshot, objectCode: string, userId: string) =>
   chainKnown(s, objectCode, (o) => o.discovered && (o.shared || o.discoveredBy === userId), true);
 
+/**
+ * منحة فتح القضية ليست اكتشافاً: عنصر جذري غير مغلق يُزرع معروفاً ومشتركاً
+ * عند open_investigation، فلا يحقق object_discovered أبداً. discovered=true
+ * وحدها ليست دليلاً — فقط عنصر مغلق كُشف أثناء اللعب أو عنصر فرعي وُجد بفعل.
+ */
+export function isOpenCaseRoot(s: RuntimeSnapshot, objectCode: string): boolean {
+  const row = s.objects.get(objectCode);
+  if (!row) return false;
+  const parent = s.catalogueParents.has(objectCode) ? s.catalogueParents.get(objectCode) ?? null : row.parent;
+  return !row.gated && !parent;
+}
+
 export function conditionHolds(s: RuntimeSnapshot, c: RuntimeCondition, p: Perspective): boolean {
   switch (c.kind) {
     case 'object_discovered':
     case 'object_state': {
       const row = s.objects.get(c.object);
       if (!row || !row.discovered) return false;
+      if (c.kind === 'object_discovered' && isOpenCaseRoot(s, c.object)) return false;
       const known = p.kind === 'team' ? objectTeamKnown(s, c.object) : objectVisibleTo(s, c.object, p.userId);
       if (!known) return false;
       return c.kind === 'object_state' ? c.states.includes(row.state) : true;

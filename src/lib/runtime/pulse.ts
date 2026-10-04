@@ -55,7 +55,6 @@ export const PULSE_CATEGORY_LABEL: Readonly<Record<PulseCategory, string>> = {
   MOVEMENT: 'حركة',
   PHYSICAL_TRACE: 'أثر مادي',
   RECORD: 'سجل',
-  CONTRADICTION: 'تناقض',
   NEW_ACTION: 'إجراء جديد',
 };
 

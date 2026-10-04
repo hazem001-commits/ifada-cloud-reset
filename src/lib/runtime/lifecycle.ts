@@ -5,6 +5,7 @@
 //
 //   Discovery:   latent → private → shared        (أو latent → shared مباشرة لاكتشاف جماعي)
 //   Lead:        latent → open_private | open_team
+//                open_private → shared (فتح جماعي لخيط خاص = ترقية، يبقى الحامل)
 //                open_private → shared (مشاركة) → followed → closed
 //                أي مرحلة مفتوحة → closed (صار قديماً بعد تغيّر العالم)
 //   World state: unreached → reached (مرة واحدة، لا رجوع)
@@ -68,7 +69,9 @@ function canTouch(l: LeadRecord, scope: 'actor' | 'team', actor?: string): boole
 export function applyLeadEvent(l: LeadRecord | null, e: LeadEvent): LeadRecord | { error: string } {
   switch (e.kind) {
     case 'open':
-      if (l) return l; // خيط واحد لكل جلسة: الفتح الثاني لا يغيّر شيئاً
+      // خيط واحد لكل جلسة. فتح جماعي لخيط خاص = ترقيته للفريق (يبقى الحامل
+      // للأصل). فتح خاص لا يسرق خيط غيره ولا يُنزل خيطاً مشتركاً.
+      if (l) return e.scope === 'team' && !l.shared ? { ...l, shared: true } : l;
       return e.scope === 'team'
         ? { holder: null, shared: true, status: 'open', followed: false }
         : { holder: e.actor, shared: false, status: 'open', followed: false };

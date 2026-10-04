@@ -71,6 +71,7 @@ export const nodeKey = (ref: RuntimeNodeRef): string => `${ref.kind}:${ref.code}
 
 // ------------------------------------------------------------
 // Pulse — تصنيف ثابت وصغير. لا تسميات خاصة بالعقد أبداً.
+// فئة نشاط عامة فقط، لا "لماذا يهم الاكتشاف" — لذلك لا فئة "تناقض" في RESET-1 (تكشف سبب أهمية الاكتشاف).
 // ------------------------------------------------------------
 export const PULSE_CATEGORIES = [
   'PERSON',
@@ -80,7 +81,6 @@ export const PULSE_CATEGORIES = [
   'MOVEMENT',
   'PHYSICAL_TRACE',
   'RECORD',
-  'CONTRADICTION',
   'NEW_ACTION',
 ] as const;
 

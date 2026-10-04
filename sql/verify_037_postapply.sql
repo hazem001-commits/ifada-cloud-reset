@@ -9,7 +9,8 @@
 -- P — pulse carries safe columns only   I — idempotency constraints
 -- C — concurrency (advisory lock, deferred triggers, cascade bound)
 -- H — gated objects (column, canonical+1 bodies, nothing gated yet)
--- Z — engine only: no case runtime data, no session runtime rows
+-- K — approved-rule guards (authored content cannot change under a rule)
+-- Z — engine only: no case runtime data, no session runtime rows (exhaustive)
 -- ============================================================
 with
 authored(name) as (values ('case_runtime_nodes'), ('case_leads'), ('case_world_states'), ('case_runtime_rules')),
@@ -20,6 +21,13 @@ client_roles(name) as (values ('anon'), ('authenticated')),
 write_priv(name) as (values ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')),
 helpers as (select p.oid, p.proname from pg_proc p
             where p.pronamespace = 'public'::regnamespace and (p.proname like '\_runtime\_%')),
+guard_fn(sig) as (values ('public._runtime_world_states_guard()'), ('public._runtime_leads_guard()'),
+                         ('public._runtime_evidence_guard()'), ('public._runtime_objects_guard()'),
+                         ('public._runtime_truncate_guard()')),
+guard_trig(name, tbl) as (values
+  ('case_world_states_guard', 'case_world_states'), ('case_leads_runtime_guard', 'case_leads'),
+  ('evidence_runtime_guard', 'evidence'), ('investigation_objects_runtime_guard', 'investigation_objects')),
+guarded(tbl) as (values ('evidence'), ('investigation_objects'), ('case_leads'), ('case_world_states')),
 rpcs(sig) as (values ('public.runtime_state(uuid)'), ('public.runtime_provenance(uuid)'),
                      ('public.share_lead(uuid, text)'), ('public.runtime_settle(uuid)')),
 trig(name, tbl) as (values
@@ -29,7 +37,7 @@ trig(name, tbl) as (values
 src as (select p.proname, p.prosrc from pg_proc p where p.pronamespace = 'public'::regnamespace
         and p.proname in ('_runtime_cascade', '_runtime_cascade_safe', 'runtime_settle', 'open_investigation', 'investigation_object_index',
                           '_runtime_on_object_state', '_runtime_on_evidence', '_runtime_on_lead', '_runtime_on_team_fact',
-                          '_runtime_condition_holds', '_runtime_try_deliver', '_runtime_rules_validate'))
+                          '_runtime_condition_holds', '_runtime_try_deliver', '_runtime_rules_validate', '_runtime_apply_effect'))
 select check_name, pass, detail from (
   -- T
   select 1 as ord, 'T1 table exists with RLS enabled: ' || t.name as check_name,
@@ -95,9 +103,20 @@ select check_name, pass, detail from (
          has_function_privilege('authenticated', r.sig, 'EXECUTE') and not has_function_privilege('anon', r.sig, 'EXECUTE'), null
   from rpcs r
   union all
-  select 24, 'X5 investigation_object_index still authenticated-only',
-         has_function_privilege('authenticated', 'public.investigation_object_index(uuid)', 'EXECUTE')
-         and not has_function_privilege('anon', 'public.investigation_object_index(uuid)', 'EXECUTE'), null
+  select 24, 'X5 authenticated-only (authenticated yes, anon no, PUBLIC no): ' || f.sig,
+         has_function_privilege('authenticated', f.sig, 'EXECUTE')
+         and not has_function_privilege('anon', f.sig, 'EXECUTE')
+         and not exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                         where p.oid = f.sig::regprocedure and a.grantee = 0 and a.privilege_type = 'EXECUTE'), null
+  from (values ('public.open_investigation(uuid)'), ('public.investigation_object_index(uuid)')) f(sig)
+  union all
+  select 25, 'X6 guard function exists, SECURITY DEFINER, not client/PUBLIC executable: ' || g.sig,
+         coalesce((select p.prosecdef from pg_proc p where p.oid = to_regprocedure(g.sig)), false)
+         and not has_function_privilege('anon', g.sig, 'EXECUTE')
+         and not has_function_privilege('authenticated', g.sig, 'EXECUTE')
+         and not exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                         where p.oid = to_regprocedure(g.sig) and a.grantee = 0 and a.privilege_type = 'EXECUTE'), null
+  from guard_fn g
   -- R
   union all
   select 30, 'R1 in supabase_realtime: ' || t.name,
@@ -118,6 +137,13 @@ select check_name, pass, detail from (
   select 41, 'P2 pulse category is constrained to the fixed taxonomy',
          exists (select 1 from pg_constraint c where c.conrelid = 'public.session_pulses'::regclass and c.contype = 'c'
                  and pg_get_constraintdef(c.oid) ~ 'PHYSICAL_TRACE' and pg_get_constraintdef(c.oid) ~ 'NEW_ACTION'), null
+  union all
+  select 42, 'P3 CONTRADICTION is not a pulse category anywhere: ' || t.name,
+         exists (select 1 from pg_constraint c where c.conrelid = to_regclass('public.' || t.name) and c.contype = 'c'
+                 and pg_get_constraintdef(c.oid) ~ 'PHYSICAL_TRACE')
+         and not exists (select 1 from pg_constraint c where c.conrelid = to_regclass('public.' || t.name) and c.contype = 'c'
+                         and pg_get_constraintdef(c.oid) ~ 'CONTRADICTION'), null
+  from (values ('session_pulses'), ('case_runtime_nodes'), ('case_leads')) t(name)
   -- I
   union all
   select 50, 'I1 primary key ' || x.tbl || ' (' || x.cols || ')',
@@ -175,6 +201,27 @@ select check_name, pass, detail from (
   select 68, 'C9 world-state guard trigger present',
          exists (select 1 from pg_trigger where tgrelid = 'public.case_world_states'::regclass
                  and tgname = 'case_world_states_guard' and not tgisinternal), null
+  union all
+  select 69, 'C10 open-case roots are not discoveries (runtime + authoring)',
+         (select prosrc from src where proname = '_runtime_condition_holds') ~ 'not v_gated and v_parent is null'
+         and (select prosrc from src where proname = '_runtime_rules_validate') ~ 'known from case open', null
+  union all
+  select 69, 'C11 team open_lead promotes an existing private lead',
+         (select prosrc from src where proname = '_runtime_apply_effect') ~ 'on conflict \(session_id, lead_code\) do update\s+set is_shared = true', null
+  union all
+  select 69, 'C12 delivered material must be runtime-only AND not initial',
+         (select prosrc from src where proname = '_runtime_rules_validate') ~ 'or v_init then', null
+  -- K
+  union all
+  select 75, 'K1 row guard trigger BEFORE UPDATE OR DELETE FOR EACH ROW: ' || t.name,
+         exists (select 1 from pg_trigger g where g.tgname = t.name and g.tgrelid = to_regclass('public.' || t.tbl)
+                 and not g.tgisinternal and g.tgenabled <> 'D' and (g.tgtype & 27) = 27), null
+  from guard_trig t
+  union all
+  select 76, 'K2 BEFORE TRUNCATE guard trigger: ' || t.tbl,
+         exists (select 1 from pg_trigger g where g.tgname = t.tbl || '_runtime_truncate_guard' and g.tgrelid = to_regclass('public.' || t.tbl)
+                 and not g.tgisinternal and g.tgenabled <> 'D' and (g.tgtype & 32) = 32 and (g.tgtype & 2) = 2), null
+  from guarded t
   -- H
   union all
   select 70, 'H1 investigation_objects.gated boolean not null default false',
@@ -194,14 +241,37 @@ select check_name, pass, detail from (
          not exists (select 1 from public.investigation_objects where gated), null
   -- Z
   union all
-  select 80, 'Z1 no authored runtime rows: ' || t.name,
-         (select count(*) from public.case_runtime_rules) + (select count(*) from public.case_runtime_nodes)
-         + (select count(*) from public.case_leads) + (select count(*) from public.case_world_states) = 0, null
-  from (values ('case_runtime_* / case_leads / case_world_states')) t(name)
+  select 80, 'Z1 no authored runtime rows: ' || t.name, t.n = 0, t.n::text
+  from (values ('case_runtime_rules', (select count(*) from public.case_runtime_rules)),
+               ('case_runtime_nodes', (select count(*) from public.case_runtime_nodes)),
+               ('case_leads',         (select count(*) from public.case_leads)),
+               ('case_world_states',  (select count(*) from public.case_world_states))) t(name, n)
   union all
-  select 81, 'Z2 no session runtime rows (inert engine)',
-         (select count(*) from public.session_leads) + (select count(*) from public.session_world_state)
-         + (select count(*) from public.session_pulses) + (select count(*) from public.session_runtime_firings) = 0, null
+  select 81, 'Z2 no session runtime rows (inert engine): ' || t.name, t.n = 0, t.n::text
+  from (values ('session_leads',              (select count(*) from public.session_leads)),
+               ('session_world_state',        (select count(*) from public.session_world_state)),
+               ('session_pulses',             (select count(*) from public.session_pulses)),
+               ('session_pulse_sources',      (select count(*) from public.session_pulse_sources)),
+               ('session_runtime_firings',    (select count(*) from public.session_runtime_firings)),
+               ('session_runtime_effects',    (select count(*) from public.session_runtime_effects)),
+               ('session_runtime_provenance', (select count(*) from public.session_runtime_provenance))) t(name, n)
+  union all
+  select 81, 'Z2b Z1+Z2 are exhaustive: every 037 table (case_runtime_*, case_leads, case_world_states, session_runtime_*, session_pulse*, session_leads, session_world_state) is listed',
+         not exists (select 1 from pg_class c
+                     where c.relnamespace = 'public'::regnamespace and c.relkind = 'r'
+                       and (c.relname like 'case\_runtime\_%' or c.relname like 'session\_runtime\_%' or c.relname like 'session\_pulse%'
+                            or c.relname in ('case_leads', 'case_world_states', 'session_leads', 'session_world_state'))
+                       and c.relname not in (select name from all_new)),
+         (select string_agg(c.relname, ',') from pg_class c
+          where c.relnamespace = 'public'::regnamespace and c.relkind = 'r'
+            and (c.relname like 'case\_runtime\_%' or c.relname like 'session\_runtime\_%' or c.relname like 'session\_pulse%')
+            and c.relname not in (select name from all_new))
+  union all
+  select 81, 'Z2c no gated-object session rows (nothing revealed)',
+         not exists (select 1 from public.session_object_state sos
+                     join public.sessions s on s.id = sos.session_id
+                     join public.investigation_objects o on o.case_id = s.case_id and o.code = sos.object_code
+                     where o.gated), null
   union all
   select 82, 'Z3 Room 714 legacy milestones untouched (3 rows: MAP_EXPANDED, RAMI_FOUND, RAMI_DIED)',
          (select array_agg(code order by code) from public.case_milestones where case_id = 'room-714')

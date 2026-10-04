@@ -141,7 +141,11 @@ function applyEffect(w: ModelWorld, e: RuntimeEffect, scope: 'actor' | 'team', a
   const s = w.snapshot;
   switch (e.kind) {
     case 'open_lead': {
-      if (s.leads.has(e.lead)) return;
+      const existing = s.leads.get(e.lead);
+      if (existing) {
+        if (scope === 'team') existing.shared = true; // team open PROMOTES a private lead (holder kept)
+        return;
+      }
       s.leads.set(e.lead, scope === 'team' ? { holder: null, shared: true, status: 'open', followed: false } : { holder: actor, shared: false, status: 'open', followed: false });
       if (scope === 'actor') emitPulse(w, `lead:${e.lead}`, actor, `lead:${e.lead}`);
       return;

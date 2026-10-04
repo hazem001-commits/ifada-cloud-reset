@@ -9,6 +9,9 @@
 --     canonical repo bodies (020 open_investigation, 026
 --     investigation_object_index), so the verbatim+1-clause rewrite is safe
 -- A — 037 has not been applied yet (fresh)
+-- G — grants on the two re-created functions (037 restates them:
+--     authenticated only; it also revokes anon from open_investigation,
+--     which Supabase default privileges may have granted — INFO here)
 -- ============================================================
 with
 fn(name) as (values
@@ -63,6 +66,22 @@ select check_name, pass, detail from (
   union all
   select 9, 'F9 investigation_objects and case_runtime catalogue are RPC-only (no SELECT for authenticated)',
          not has_table_privilege('authenticated', 'public.investigation_objects', 'SELECT'), null
+  -- G — grants on the re-created functions
+  union all
+  select 10, 'G1 authenticated can execute open_investigation(uuid)',
+         has_function_privilege('authenticated', 'public.open_investigation(uuid)', 'EXECUTE'), null
+  union all
+  select 11, 'G2 investigation_object_index(uuid) is authenticated-only (authenticated yes, anon no, PUBLIC no)',
+         has_function_privilege('authenticated', 'public.investigation_object_index(uuid)', 'EXECUTE')
+         and not has_function_privilege('anon', 'public.investigation_object_index(uuid)', 'EXECUTE')
+         and not exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                         where p.oid = 'public.investigation_object_index(uuid)'::regprocedure
+                           and a.grantee = 0 and a.privilege_type = 'EXECUTE'), null
+  union all
+  select 12, 'G3 PUBLIC cannot execute open_investigation(uuid)',
+         not exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                     where p.oid = 'public.open_investigation(uuid)'::regprocedure
+                       and a.grantee = 0 and a.privilege_type = 'EXECUTE'), null
   -- B — canonical bodies
   union all
   select 20, 'B1 open_investigation body is canonical 020 (md5)',
@@ -92,7 +111,14 @@ select check_name, pass, detail from (
   union all
   select 33, 'A4 no _runtime_* function exists',
          not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like '\_runtime\_%'), null
+  union all
+  select 34, 'A5 no approved-rule guard trigger exists yet',
+         not exists (select 1 from pg_trigger where not tgisinternal
+                     and (tgname like '%runtime\_guard' or tgname like '%runtime\_truncate\_guard' or tgname = 'case_world_states_guard')), null
   -- INFO
+  union all
+  select 92, 'I3 anon can execute open_investigation before 037 (INFO — 037 revokes it)', null,
+         has_function_privilege('anon', 'public.open_investigation(uuid)', 'EXECUTE')::text
   union all
   select 90, 'I1 investigation objects per case (INFO)', null,
          (select string_agg(case_id || '=' || n, ', ' order by case_id)

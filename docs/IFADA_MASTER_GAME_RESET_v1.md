@@ -110,8 +110,9 @@ Examples of safe pulse dimensions:
 - MOVEMENT
 - PHYSICAL TRACE
 - RECORD
-- CONTRADICTION
 - NEW ACTION
+
+(RESET-1: `CONTRADICTION` was removed from the fixed taxonomy — it says *why* a finding matters, which is too revealing for a private-discovery pulse. A pulse names only a coarse category of activity.)
 
 A pulse can expose:
 - teammate display name

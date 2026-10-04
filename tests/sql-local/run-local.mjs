@@ -9,10 +9,18 @@
 //   4. 037_runtime_behavior → RT_SCENARIO_OK (loop, privacy, causality, SYSTEM actor, bound)
 //   5. concurrency          → same-session cascades serialize; other sessions do not wait
 //   6. no deadlock          → a player holding a row the cascade needs never loses their action
+//   0. atomicity (before 2) → 037 with a failure injected before COMMIT leaves
+//                             the database byte-for-byte pre-037 (pre-verifier
+//                             still all TRUE)
+//   7. mutation tests       → each hardening protection is removed from a copy
+//                             of 037 in turn; the suite must FAIL on the named
+//                             check (proves the protection is load-bearing).
+//                             Skip with IFADA_LOCAL_PG_MUTATIONS=0.
 // Usage: IFADA_LOCAL_PG_HOST=/path/to/socket/dir node tests/sql-local/run-local.mjs
 // The target server must be a disposable local cluster (trust auth, user postgres).
 // ============================================================
 import { spawnSync, spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -39,11 +47,14 @@ function psql(args, { db = DB, input } = {}) {
   if (r.status !== 0) throw new Error(`psql ${args.join(' ')} failed:\n${r.stderr}`);
   return r.stdout;
 }
-const file = (rel) => psql(['-f', path.join(ROOT, rel)]);
-const rows = (rel) => psql(['-At', '-F', '|', '-f', path.join(ROOT, rel)]).trim().split('\n').map((l) => l.split('|'));
+const file = (rel, db = DB) => psql(['-f', path.join(ROOT, rel)], { db });
+const rows = (rel, db = DB) => psql(['-At', '-F', '|', '-f', path.join(ROOT, rel)], { db }).trim().split('\n').map((l) => l.split('|'));
+const SQL037 = readFileSync(path.join(ROOT, 'sql/037_investigation_runtime.sql'), 'utf8');
+const TPL = `${DB}_tpl`;
+const MUT = `${DB}_mut`;
 
-function assertVerifier(rel) {
-  const out = rows(rel);
+function assertVerifier(rel, db = DB) {
+  const out = rows(rel, db);
   const bad = out.filter((r) => r[1] === 'f');
   if (bad.length) throw new Error(`${rel}: FALSE rows:\n${bad.map((r) => r[0]).join('\n')}`);
   return { rows: out.length, info: out.filter((r) => r[1] === '').length };
@@ -57,6 +68,10 @@ export function runLocal(log = console.log) {
   log('chain replayed:', CHAIN.length, 'files');
 
   log('pre-apply:', assertVerifier('sql/verify_037_preapply.sql'));
+  atomicity(SQL037, DB);
+  log('atomicity: 037 with an injected failure before COMMIT left nothing behind (pre-verifier still TRUE)');
+  psql(['-c', `drop database if exists ${TPL}`], { db: 'postgres' });
+  psql(['-c', `create database ${TPL} template ${DB}`], { db: 'postgres' });
   file('sql/037_investigation_runtime.sql');
   file('sql/037_investigation_runtime.sql');
   log('037 applied twice (idempotent)');
@@ -118,7 +133,89 @@ async function noDeadlock(log, S) {
   const state = psql(['-Atc', `select state from session_object_state where session_id = '${S}' and object_code = 'PHONE'`]).trim();
   if (state !== 'DONE') throw new Error(`deferred firing never happened: PHONE = ${state}`);
   log('no deadlock: player transaction committed; the blocked firing re-fired in its own cascade');
+  if (process.env.IFADA_LOCAL_PG_MUTATIONS !== '0') mutations(log);
   return true;
+}
+
+// Apply `sql` with a failing statement injected just before its final COMMIT
+// (or at the end if there is none): psql must fail, and the database must
+// still pass the PRE-apply verifier — nothing of 037 survived.
+function atomicity(sql, db) {
+  const at = sql.lastIndexOf('\ncommit;');
+  const broken = at >= 0 ? `${sql.slice(0, at)}\nselect 1 / 0; -- injected\n${sql.slice(at)}` : `${sql}\nselect 1 / 0; -- injected\n`;
+  const r = spawnSync('psql', [...base, '-d', db, '-f', '-'], { encoding: 'utf8', input: broken });
+  if (r.status === 0 || !/division by zero/.test(r.stderr)) throw new Error(`atomicity: injected failure did not abort 037: ${r.stderr}`);
+  assertVerifier('sql/verify_037_preapply.sql', db);
+}
+
+// Each mutation removes ONE protection from a copy of 037. The full suite
+// (post-verifier + behaviour scenario, or the atomicity check) must then fail
+// on the named check. A mutation that survives = a protection nobody tests.
+const MUTATIONS = [
+  { name: 'runtime: open-case root counts as object_discovered', expect: 'initial root: object_discovered never fires',
+    from: 'if not found or (not v_gated and v_parent is null) then', to: 'if not found then' },
+  { name: 'authoring: open-case root accepted in object_discovered', expect: 'authoring refused H_ROOT_DISC_TEAM',
+    from: "and not o.gated and nullif(trim(o.parent_code), '') is null) then", to: 'and false) then' },
+  { name: 'authoring: initial material accepted as runtime-only', expect: 'authoring refused H_DELIVER_INITIAL', from: 'or v_init then', to: 'then' },
+  { name: 'team open_lead leaves a private lead private', expect: 'team open PROMOTED',
+    from: 'on conflict (session_id, lead_code) do update\n        set is_shared = true,\n            shared_at = coalesce(public.session_leads.shared_at, now())\n        where not public.session_leads.is_shared;',
+    to: 'on conflict do nothing;' },
+  { name: 'evidence guard disabled', expect: 'guard fails closed: evidence requires (delivered)',
+    from: '  v_identity := tg_op', to: '  return coalesce(new, old);\n  v_identity := tg_op' },
+  { name: 'evidence guard ignores requires/is_initial of delivered material', expect: 'guard fails closed: evidence requires (delivered)',
+    from: 'if v_delivered\n     or (v_identity', to: 'if (v_delivered and v_identity)\n     or (v_identity' },
+  { name: 'object guard disabled', expect: 'guard fails closed: object gated',
+    from: "  if tg_op = 'UPDATE' and new.code is not distinct from old.code and new.case_id is not distinct from old.case_id\n     and new.gated",
+    to: "  return coalesce(new, old);\n  if tg_op = 'UPDATE' and new.code is not distinct from old.code and new.case_id is not distinct from old.case_id\n     and new.gated" },
+  { name: 'object guard ignores ancestors', expect: 'guard fails closed: ancestor gated', from: 'sub.depth < 9', to: 'sub.depth < 0' },
+  { name: 'lead guard disabled', expect: 'guard fails closed: lead code',
+    from: "  if tg_op = 'UPDATE' and new.lead_code", to: "  return coalesce(new, old);\n  if tg_op = 'UPDATE' and new.lead_code" },
+  { name: 'world-state guard ignores case_id', expect: 'guard fails closed: world case_id',
+    from: 'new.state_code is not distinct from old.state_code\n     and new.case_id is not distinct from old.case_id then', to: 'new.state_code is not distinct from old.state_code then' },
+  { name: 'truncate guard disabled', expect: 'guard fails closed: truncate leads',
+    from: "if exists (select 1 from public.case_runtime_rules r where r.status = 'approved') then", to: 'if false then' },
+  { name: 'open_investigation stays anon-executable', expect: 'X5 authenticated-only (authenticated yes, anon no, PUBLIC no): public.open_investigation(uuid)',
+    from: 'revoke execute on function public.open_investigation(uuid)         from public, anon;\n', to: '' },
+  { name: 'CONTRADICTION back in the pulse taxonomy', expect: 'P3 CONTRADICTION is not a pulse category anywhere: session_pulses',
+    from: "'RECORD','NEW_ACTION')),\n  created_at", to: "'RECORD','CONTRADICTION','NEW_ACTION')),\n  created_at" },
+  { name: 'migration not atomic (BEGIN/COMMIT removed)', expect: 'atomicity', atomic: true, from: '\nbegin;\n', to: '\n', also: ['\ncommit;\n', '\n'] },
+];
+
+function mutations(log) {
+  let killed = 0;
+  const detail = [];
+  for (const m of MUTATIONS) {
+    const edits = [[m.from, m.to], ...(m.also ? [m.also] : [])];
+    let sql = SQL037;
+    for (const [from, to] of edits) {
+      if (sql.split(from).length !== 2) throw new Error(`mutation "${m.name}": anchor must occur exactly once: ${from}`);
+      sql = sql.replace(from, to);
+    }
+    psql(['-c', `drop database if exists ${MUT}`], { db: 'postgres' });
+    psql(['-c', `create database ${MUT} template ${TPL}`], { db: 'postgres' });
+    // verifier and behaviour scenario run independently: a mutation is killed
+    // when either names the expected check (both layers are reported)
+    const failures = [];
+    const attempt = (label, fn) => { try { fn(); } catch (e) { failures.push(`${label}: ${e.message}`); } };
+    if (m.atomic) {
+      attempt('atomicity', () => atomicity(sql, MUT));
+    } else {
+      psql(['-f', '-'], { db: MUT, input: sql });
+      attempt('post-verifier', () => assertVerifier('sql/verify_037_postapply.sql', MUT));
+      attempt('scenario', () => {
+        const out = psql(['-f', path.join(ROOT, 'tests/sql-local/037_runtime_behavior.sql')], { db: MUT });
+        if (!out.includes('RT_SCENARIO_OK')) throw new Error('scenario did not finish');
+      });
+    }
+    if (failures.length === 0) throw new Error(`mutation SURVIVED (protection not load-bearing): ${m.name}`);
+    if (!failures.some((f) => f.includes(m.expect))) throw new Error(`mutation "${m.name}" failed for the wrong reason:\n${failures.join('\n').slice(0, 800)}`);
+    detail.push(`${m.name} → ${failures.map((f) => f.split(':')[0]).join(' + ')}`);
+    killed += 1;
+  }
+  psql(['-c', `drop database if exists ${MUT}`], { db: 'postgres' });
+  psql(['-c', `drop database if exists ${TPL}`], { db: 'postgres' });
+  log(`mutations: ${killed}/${MUTATIONS.length} killed, each on its named check`);
+  for (const d of detail) log('  killed:', d);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

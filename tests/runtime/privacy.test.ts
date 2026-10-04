@@ -41,8 +41,9 @@ test('pulse sanitizer keeps exactly id/actor/category/time — every other field
 });
 
 test('pulse taxonomy is small and fixed; unknown / node-specific categories drop the whole pulse', () => {
-  assert.equal(PULSE_CATEGORIES.length, 9);
-  for (const bad of ['BLOOD', 'F-04', 'RAMI', 'PLACE:M1', '', null, 7]) {
+  assert.deepEqual([...PULSE_CATEGORIES], ['PERSON', 'PLACE', 'TIME', 'DEVICE', 'MOVEMENT', 'PHYSICAL_TRACE', 'RECORD', 'NEW_ACTION']);
+  assert.ok(!(PULSE_CATEGORIES as readonly string[]).includes('CONTRADICTION'), 'RESET-1: a pulse never says why a finding matters');
+  for (const bad of ['CONTRADICTION', 'BLOOD', 'F-04', 'RAMI', 'PLACE:M1', '', null, 7]) {
     assert.equal(sanitizePulse({ id: PULSE_ID, actor: A, category: bad, at: '2026-10-03T10:00:00Z' }), null, String(bad));
   }
   assert.equal(sanitizePulse({ id: 'not-a-uuid', actor: A, category: 'TIME', at: '2026-10-03T10:00:00Z' }), null);

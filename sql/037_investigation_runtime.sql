@@ -85,9 +85,40 @@
 --    title, body, place, time context, channel, specialization, rule or
 --    count. Pulses never feed AuthorizedKnowledge, search, connections,
 --    entities, AI or hypothesis testing (application rule + tests).
+--    Fixed taxonomy (coarse activity only, never why it matters):
+--    PERSON PLACE TIME DEVICE MOVEMENT PHYSICAL_TRACE RECORD NEW_ACTION.
 -- 7. PROCESSING JOBS: unchanged (processing_until + auto_advance settled
 --    on the next authoritative read/action, sql/019). No scheduler.
+-- 8. OPEN-CASE GRANTS ARE NOT DISCOVERIES. A non-gated ROOT object is
+--    seeded known + shared by open_investigation: `object_discovered` on it
+--    never holds at runtime and an approved rule may not name it (it would
+--    fire at case open). discovered = true is never proof of discovery on
+--    its own: object_discovered holds only for a gated object (a runtime
+--    reveal — never progress) or a non-gated CHILD found through play
+--    (progress). A root still yields progress through a non-initial
+--    object_state reached by a player action.
+-- 9. APPROVED-RULE GUARDS. Authored content an APPROVED rule was validated
+--    against cannot change meaning underneath it (set the rule to draft
+--    first, edit, re-approve → the validator re-checks):
+--      evidence            code / case_id / delete (any approved reference);
+--                          + requires / is_initial when an approved rule
+--                          delivers it (runtime-only must stay runtime-only)
+--      investigation_objects  code / case_id / gated / initial_state /
+--                          parent_code / delete — for a referenced object
+--                          AND every ancestor of one (topology)
+--      case_leads          lead_code / case_id / delete
+--      case_world_states   state_code / case_id / major / delete
+--      TRUNCATE of any of them while any approved rule exists
+--    INTENTIONALLY MUTABLE (no invariant depends on them): titles, bodies,
+--    descriptions, media, interactions, auto_advance, state_descriptions,
+--    sort orders, lead label (re-run the TS lint), lead / node pulse
+--    category, world-state headline / body / presentation.
+-- 10. ATOMIC: the whole migration runs in one transaction (BEGIN … COMMIT).
+--     Every statement below is transaction-safe (no CONCURRENTLY, no VACUUM,
+--     no ALTER TYPE … ADD VALUE); any failure rolls everything back.
 -- ============================================================
+
+begin;
 
 -- ============================================================
 -- 0. GATED OBJECTS — static column on the locked content table
@@ -106,7 +137,7 @@ create table if not exists public.case_runtime_nodes (
   node_kind      text not null check (node_kind in ('object', 'evidence')),
   node_code      text not null check (node_code ~ '^[A-Z0-9_-]{1,64}$'),
   pulse_category text not null check (pulse_category in
-                   ('PERSON','PLACE','TIME','DEVICE','MOVEMENT','PHYSICAL_TRACE','RECORD','CONTRADICTION','NEW_ACTION')),
+                   ('PERSON','PLACE','TIME','DEVICE','MOVEMENT','PHYSICAL_TRACE','RECORD','NEW_ACTION')),
   primary key (case_id, node_kind, node_code)
 );
 
@@ -117,7 +148,7 @@ create table if not exists public.case_leads (
   -- never the answer. Shown only to players who hold/see the lead.
   label          text not null check (char_length(label) between 1 and 200),
   pulse_category text check (pulse_category in
-                   ('PERSON','PLACE','TIME','DEVICE','MOVEMENT','PHYSICAL_TRACE','RECORD','CONTRADICTION','NEW_ACTION')),
+                   ('PERSON','PLACE','TIME','DEVICE','MOVEMENT','PHYSICAL_TRACE','RECORD','NEW_ACTION')),
   sort_order     integer not null default 0,
   primary key (case_id, lead_code)
 );
@@ -189,7 +220,7 @@ create table if not exists public.session_pulses (
   session_id uuid not null references public.sessions(id) on delete cascade,
   actor_id   uuid references auth.users(id) on delete set null,  -- null = system (e.g. lab result)
   category   text not null check (category in
-               ('PERSON','PLACE','TIME','DEVICE','MOVEMENT','PHYSICAL_TRACE','RECORD','CONTRADICTION','NEW_ACTION')),
+               ('PERSON','PLACE','TIME','DEVICE','MOVEMENT','PHYSICAL_TRACE','RECORD','NEW_ACTION')),
   created_at timestamptz not null default now()
 );
 create index if not exists session_pulses_session_idx on public.session_pulses (session_id, created_at desc);
@@ -282,6 +313,7 @@ declare
   v_world    text;
   v_ev       text;
   v_req      text[];
+  v_init     boolean;
 begin
   new.rule_id := trim(new.rule_id);
 
@@ -350,6 +382,13 @@ begin
     if v_kind in ('object_discovered', 'object_state')
        and not exists (select 1 from public.investigation_objects o where o.case_id = new.case_id and o.code = v_c ->> 'object') then
       raise exception 'RUNTIME_RULE_REFERENCE: unknown object';
+    elsif v_kind = 'object_discovered'
+       and exists (select 1 from public.investigation_objects o
+                   where o.case_id = new.case_id and o.code = v_c ->> 'object'
+                     and not o.gated and nullif(trim(o.parent_code), '') is null) then
+      -- OPEN-CASE GRANT ≠ DISCOVERY: a non-gated root is seeded known by
+      -- open_investigation, so this condition would "fire" at case open.
+      raise exception 'RUNTIME_RULE_CAUSALITY: object % is known from case open (non-gated root); an open-case grant is not a discovery', v_c ->> 'object';
     elsif v_kind = 'evidence_unlocked'
        and not exists (select 1 from public.evidence e where e.case_id = new.case_id and e.code = v_c ->> 'evidence') then
       raise exception 'RUNTIME_RULE_REFERENCE: unknown evidence';
@@ -381,7 +420,7 @@ begin
        and not exists (select 1 from public.case_world_states w where w.case_id = new.case_id and w.state_code = v_e ->> 'state') then
       raise exception 'RUNTIME_RULE_REFERENCE: unknown world state';
     elsif v_kind = 'deliver_evidence' then
-      select e.requires into v_req from public.evidence e where e.case_id = new.case_id and e.code = v_e ->> 'evidence';
+      select e.requires, e.is_initial into v_req, v_init from public.evidence e where e.case_id = new.case_id and e.code = v_e ->> 'evidence';
       if not found then
         raise exception 'RUNTIME_RULE_REFERENCE: unknown evidence';
       end if;
@@ -390,8 +429,10 @@ begin
       -- that code), so the authoritative unlock_evidence — and every player
       -- path through it (direct RPC, challenges, connections, legacy panel) —
       -- refuses it forever. Only the world (_runtime_try_deliver) delivers it.
-      if coalesce(v_req, '{}') <> array['@RUNTIME']::text[] then
-        raise exception 'RUNTIME_RULE_CAUSALITY: delivered material must be runtime-only (requires = {@RUNTIME})';
+      -- is_initial material is granted by open_case regardless of requires,
+      -- so runtime-only material can never be initial either.
+      if coalesce(v_req, '{}') <> array['@RUNTIME']::text[] or v_init then
+        raise exception 'RUNTIME_RULE_CAUSALITY: delivered material must be runtime-only (requires = {@RUNTIME}, not initial)';
       end if;
     end if;
   end loop;
@@ -399,7 +440,9 @@ begin
   -- ---- approved: INVESTIGATION PROGRESS (inductive — no laundering) ----
   -- A condition is progress only if no evidence-only rule could have made
   -- it true on its own:
-  --   object_discovered  — only a NON-gated object (a reveal is not an act)
+  --   object_discovered  — only a NON-gated CHILD object found through play
+  --                        (a reveal is not an act; an open-case root is
+  --                        not a discovery and is refused above)
   --   object_state       — only states that exclude the object's initial state
   --                        (reached by a player action or a progress-gated advance)
   --   connection_validated, lead followed/closed — player acts / progress-gated effects
@@ -410,7 +453,8 @@ begin
     v_kind := v_c ->> 'kind';
     if (v_kind = 'object_discovered'
           and exists (select 1 from public.investigation_objects o
-                      where o.case_id = new.case_id and o.code = v_c ->> 'object' and not o.gated))
+                      where o.case_id = new.case_id and o.code = v_c ->> 'object' and not o.gated
+                        and nullif(trim(o.parent_code), '') is not null))
        or (v_kind = 'object_state'
           and exists (select 1 from public.investigation_objects o
                       where o.case_id = new.case_id and o.code = v_c ->> 'object'
@@ -475,23 +519,155 @@ begin
 end;
 $$;
 
--- A world state's causality class cannot change under approved rules
--- (re-validate: change it, then `update case_runtime_rules set status = status
--- where case_id = … and status = 'approved'` re-runs the validator on every rule).
+-- ------------------------------------------------------------
+-- APPROVED-RULE GUARDS (header §9). Authored content that an APPROVED rule
+-- was validated against cannot change meaning underneath it. The author
+-- sets the dependent rules to draft, edits, then re-approves (the
+-- validator re-checks; `update case_runtime_rules set status = status
+-- where case_id = … and status = 'approved'` re-runs it on every rule).
+-- SECURITY DEFINER: the lookup must always see every approved rule,
+-- whatever role edits content (an RLS-limited editor must not see zero
+-- rules and pass — fail closed). When the CASE row itself is gone (ON
+-- DELETE CASCADE from cases), the whole case is going: nothing to protect.
+-- ------------------------------------------------------------
+
+-- A world state's causality class / identity cannot change under approved rules.
 create or replace function public._runtime_world_states_guard()
 returns trigger
 language plpgsql
+security definer
 set search_path = public
 as $$
 begin
-  if (tg_op = 'DELETE' or new.major is distinct from old.major or new.state_code is distinct from old.state_code)
-     and exists (select 1 from public.case_runtime_rules r
-                 where r.case_id = old.case_id and r.status = 'approved'
-                   and (r.conditions @> jsonb_build_array(jsonb_build_object('kind', 'world_state', 'state', old.state_code))
-                        or r.effects @> jsonb_build_array(jsonb_build_object('kind', 'reach_world_state', 'state', old.state_code)))) then
+  if tg_op = 'UPDATE' and new.major is not distinct from old.major and new.state_code is not distinct from old.state_code
+     and new.case_id is not distinct from old.case_id then
+    return new;
+  end if;
+  if not exists (select 1 from public.cases c where c.id = old.case_id) then
+    return coalesce(new, old);
+  end if;
+  if exists (select 1 from public.case_runtime_rules r
+             where r.case_id = old.case_id and r.status = 'approved'
+               and (r.conditions @> jsonb_build_array(jsonb_build_object('kind', 'world_state', 'state', old.state_code))
+                    or r.effects @> jsonb_build_array(jsonb_build_object('kind', 'reach_world_state', 'state', old.state_code)))) then
     raise exception 'RUNTIME_RULE_CAUSALITY: world state % is used by approved rules; set them to draft first', old.state_code;
   end if;
   return coalesce(new, old);
+end;
+$$;
+
+-- Leads: identity (lead_code, case_id) and existence. label / pulse_category /
+-- sort_order stay editable (no invariant depends on them).
+create or replace function public._runtime_leads_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if tg_op = 'UPDATE' and new.lead_code is not distinct from old.lead_code and new.case_id is not distinct from old.case_id then
+    return new;
+  end if;
+  if not exists (select 1 from public.cases c where c.id = old.case_id) then
+    return coalesce(new, old);
+  end if;
+  if exists (select 1 from public.case_runtime_rules r
+             where r.case_id = old.case_id and r.status = 'approved'
+               and (exists (select 1 from jsonb_array_elements(r.conditions) c
+                            where c ->> 'kind' = 'lead' and c ->> 'lead' = old.lead_code)
+                    or exists (select 1 from jsonb_array_elements(r.effects) e
+                               where e ->> 'kind' in ('open_lead', 'follow_lead', 'close_lead') and e ->> 'lead' = old.lead_code))) then
+    raise exception 'RUNTIME_RULE_GUARD: lead % is used by approved runtime rules; set them to draft first', old.lead_code;
+  end if;
+  return coalesce(new, old);
+end;
+$$;
+
+-- Evidence: identity (code, case_id) and existence while ANY approved rule
+-- references it; requires / is_initial while an approved rule DELIVERS it
+-- (runtime-only material must never become player-unlockable or initial).
+create or replace function public._runtime_evidence_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_identity  boolean;
+  v_delivered boolean;
+begin
+  v_identity := tg_op = 'DELETE' or new.code is distinct from old.code or new.case_id is distinct from old.case_id;
+  if not v_identity and new.requires is not distinct from old.requires and new.is_initial is not distinct from old.is_initial then
+    return new;
+  end if;
+  if not exists (select 1 from public.cases c where c.id = old.case_id) then
+    return coalesce(new, old);
+  end if;
+  v_delivered := exists (select 1 from public.case_runtime_rules r
+                         where r.case_id = old.case_id and r.status = 'approved'
+                           and r.effects @> jsonb_build_array(jsonb_build_object('kind', 'deliver_evidence', 'evidence', old.code)));
+  if v_delivered
+     or (v_identity and exists (select 1 from public.case_runtime_rules r
+                                where r.case_id = old.case_id and r.status = 'approved'
+                                  and r.conditions @> jsonb_build_array(jsonb_build_object('kind', 'evidence_unlocked', 'evidence', old.code)))) then
+    raise exception 'RUNTIME_RULE_GUARD: evidence % is used by approved runtime rules; set them to draft first', old.code;
+  end if;
+  return coalesce(new, old);
+end;
+$$;
+
+-- Investigation objects: code / case_id / gated / initial_state / parent_code
+-- and existence, for an object an approved rule references AND for every
+-- ancestor of one (re-parenting or un-gating an ancestor changes who can
+-- reach the referenced object — the topology the rule was approved on).
+create or replace function public._runtime_objects_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if tg_op = 'UPDATE' and new.code is not distinct from old.code and new.case_id is not distinct from old.case_id
+     and new.gated is not distinct from old.gated and new.initial_state is not distinct from old.initial_state
+     and new.parent_code is not distinct from old.parent_code then
+    return new;
+  end if;
+  if not exists (select 1 from public.cases c where c.id = old.case_id) then
+    return coalesce(new, old);
+  end if;
+  if exists (
+    with recursive sub(code, depth) as (
+      select old.code, 0
+      union
+      select o.code, sub.depth + 1
+      from public.investigation_objects o join sub on upper(trim(o.parent_code)) = upper(trim(sub.code))
+      where o.case_id = old.case_id and sub.depth < 9
+    )
+    select 1 from sub
+    join public.case_runtime_rules r on r.case_id = old.case_id and r.status = 'approved'
+    where exists (select 1 from jsonb_array_elements(r.conditions) c
+                  where c ->> 'kind' in ('object_discovered', 'object_state') and c ->> 'object' = sub.code)
+       or exists (select 1 from jsonb_array_elements(r.effects) e
+                  where e ->> 'kind' in ('reveal_object', 'advance_object_state') and e ->> 'object' = sub.code)
+  ) then
+    raise exception 'RUNTIME_RULE_GUARD: object % is used by approved runtime rules (directly or as an ancestor); set them to draft first', old.code;
+  end if;
+  return coalesce(new, old);
+end;
+$$;
+
+-- TRUNCATE skips row triggers: refuse it on guarded content while any rule is approved.
+create or replace function public._runtime_truncate_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if exists (select 1 from public.case_runtime_rules r where r.status = 'approved') then
+    raise exception 'RUNTIME_RULE_GUARD: % has content used by approved runtime rules; set them to draft first', tg_table_name;
+  end if;
+  return null;
 end;
 $$;
 
@@ -499,6 +675,32 @@ drop trigger if exists case_world_states_guard on public.case_world_states;
 create trigger case_world_states_guard
   before update or delete on public.case_world_states
   for each row execute function public._runtime_world_states_guard();
+
+drop trigger if exists case_leads_runtime_guard on public.case_leads;
+create trigger case_leads_runtime_guard
+  before update or delete on public.case_leads
+  for each row execute function public._runtime_leads_guard();
+
+drop trigger if exists evidence_runtime_guard on public.evidence;
+create trigger evidence_runtime_guard
+  before update or delete on public.evidence
+  for each row execute function public._runtime_evidence_guard();
+
+drop trigger if exists investigation_objects_runtime_guard on public.investigation_objects;
+create trigger investigation_objects_runtime_guard
+  before update or delete on public.investigation_objects
+  for each row execute function public._runtime_objects_guard();
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['evidence', 'investigation_objects', 'case_leads', 'case_world_states'] loop
+    execute format('drop trigger if exists %I on public.%I', t || '_runtime_truncate_guard', t);
+    execute format('create trigger %I before truncate on public.%I for each statement execute function public._runtime_truncate_guard()',
+                   t || '_runtime_truncate_guard', t);
+  end loop;
+end $$;
 
 drop trigger if exists case_runtime_rules_validate on public.case_runtime_rules;
 create trigger case_runtime_rules_validate
@@ -680,10 +882,12 @@ security definer
 set search_path = public
 as $$
 declare
-  v_kind text := p_cond ->> 'kind';
-  v_sos  public.session_object_state%rowtype;
-  v_eid  uuid;
-  v_lead public.session_leads%rowtype;
+  v_kind   text := p_cond ->> 'kind';
+  v_sos    public.session_object_state%rowtype;
+  v_gated  boolean;
+  v_parent text;
+  v_eid    uuid;
+  v_lead   public.session_leads%rowtype;
 begin
   if p_actor is not null and p_actor is distinct from auth.uid() then
     return false;
@@ -694,6 +898,17 @@ begin
     where session_id = p_session and object_code = p_cond ->> 'object';
     if not found or not v_sos.discovered then
       return false;
+    end if;
+    if v_kind = 'object_discovered' then
+      -- OPEN-CASE GRANT ≠ DISCOVERY: discovered = true alone proves nothing.
+      -- A non-gated root is seeded known by open_investigation → never a
+      -- discovery. Only a revealed gated object or a non-gated child found
+      -- through play satisfies object_discovered. Unknown object → closed.
+      select o.gated, nullif(trim(o.parent_code), '') into v_gated, v_parent
+      from public.investigation_objects o where o.case_id = p_case and o.code = v_sos.object_code;
+      if not found or (not v_gated and v_parent is null) then
+        return false;
+      end if;
     end if;
     if p_actor is null then
       if not public._runtime_object_team_known(p_session, p_case, v_sos.object_code) then return false; end if;
@@ -854,10 +1069,18 @@ begin
       return;
     end if;
     if p_scope = 'team' then
+      -- team open: create shared, or PROMOTE an existing private lead to the
+      -- team (one lead per session; the original holder stays for provenance;
+      -- shared_by stays as is — the world, not a player, shared it).
       insert into public.session_leads (session_id, lead_code, holder, is_shared, shared_at)
       values (p_session, v_code, null, true, now())
-      on conflict do nothing;
+      on conflict (session_id, lead_code) do update
+        set is_shared = true,
+            shared_at = coalesce(public.session_leads.shared_at, now())
+        where not public.session_leads.is_shared;
     else
+      -- actor open: create mine if absent; never steal another player's
+      -- private lead, never downgrade a shared one
       insert into public.session_leads (session_id, lead_code, holder, is_shared)
       values (p_session, v_code, p_actor, false)
       on conflict do nothing;
@@ -1472,6 +1695,10 @@ grant select on table public.session_pulses      to authenticated;
 revoke all on function public._runtime_code_ok(text)                                     from public, anon, authenticated;
 revoke all on function public._runtime_rules_validate()                                  from public, anon, authenticated;
 revoke all on function public._runtime_world_states_guard()                              from public, anon, authenticated;
+revoke all on function public._runtime_leads_guard()                                     from public, anon, authenticated;
+revoke all on function public._runtime_evidence_guard()                                  from public, anon, authenticated;
+revoke all on function public._runtime_objects_guard()                                   from public, anon, authenticated;
+revoke all on function public._runtime_truncate_guard()                                  from public, anon, authenticated;
 revoke all on function public._runtime_object_team_known(uuid, text, text)               from public, anon, authenticated;
 revoke all on function public._runtime_condition_holds(uuid, text, jsonb, uuid)          from public, anon, authenticated;
 revoke all on function public._runtime_provenance(uuid, text, text, text, uuid)          from public, anon, authenticated;
@@ -1496,8 +1723,14 @@ grant execute on function public.runtime_provenance(uuid) to authenticated;
 grant execute on function public.share_lead(uuid, text)   to authenticated;
 grant execute on function public.runtime_settle(uuid)     to authenticated;
 
--- Re-created protected functions keep their existing grants (create or
--- replace preserves ACLs); restated so a fresh environment matches live.
+-- Re-created protected functions: authenticated only. create or replace
+-- preserves ACLs, so this is restated explicitly. 019 revoked
+-- open_investigation from PUBLIC only — on Supabase the default privileges
+-- also grant anon EXECUTE on every new public function, so 037 revokes anon
+-- here too (verify_037_preapply reports the live state as INFO).
 revoke execute on function public.investigation_object_index(uuid) from public, anon;
+revoke execute on function public.open_investigation(uuid)         from public, anon;
 grant execute on function public.investigation_object_index(uuid) to authenticated;
-grant execute on function public.open_investigation(uuid) to authenticated;
+grant execute on function public.open_investigation(uuid)         to authenticated;
+
+commit;

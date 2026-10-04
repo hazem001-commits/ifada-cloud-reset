@@ -27,9 +27,10 @@ export interface AuthoringIssue {
 
 /** ما تعرفه قاعدة البيانات عن القضية عند الاعتماد (مراجع فقط). */
 export interface AuthoringCatalogue {
-  objects: ReadonlyMap<string, { gated: boolean; initialState: string }>;
-  /** دليل → متطلباته القديمة (requires). */
-  evidence: ReadonlyMap<string, { requires: readonly string[] }>;
+  /** parent = null → عنصر جذري (غير المغلق منه يُزرع معروفاً عند فتح القضية). */
+  objects: ReadonlyMap<string, { gated: boolean; initialState: string; parent: string | null }>;
+  /** دليل → متطلباته القديمة (requires) وهل يُمنح عند فتح القضية (is_initial). */
+  evidence: ReadonlyMap<string, { requires: readonly string[]; initial?: boolean }>;
   leads: ReadonlyMap<string, { label: string }>;
   worldStates: ReadonlyMap<string, { major: boolean }>;
   /** قواعد روابط معتمدة (027). */
@@ -45,10 +46,14 @@ export interface RawRule {
   sortOrder?: number;
 }
 
+/** عنصر جذري غير مغلق: معروف منذ فتح القضية — ليس اكتشافاً ولا تقدّماً. */
+export const isOpenCaseRootObject = (o: { gated: boolean; parent: string | null } | undefined): boolean => !!o && !o.gated && !o.parent;
+
 /**
  * شرط يُعتبر تقدّماً تحقيقياً — استقرائياً، حتى لا "يُغسل" دليل عبر قاعدة
  * وسيطة (دليل → كشف/تتبّع/تقدّم → حالة عالم كبرى):
- *   object_discovered — عنصر غير مغلق فقط (الكشف ليس فعلاً)
+ *   object_discovered — عنصر فرعي غير مغلق وُجد باللعب فقط (الكشف ليس فعلاً،
+ *                       والجذر المعروف عند فتح القضية ليس اكتشافاً)
  *   object_state      — حالات تستثني الحالة الابتدائية (وصلها فعل لاعب أو تقدّم مشروط)
  *   connection_validated، خيط متتبَّع/مغلق — أفعال لاعب أو آثار مشروطة بتقدّم
  *   world_state       — حالة عالم كبرى فقط (مشروطة بتقدّم بدورها)
@@ -57,7 +62,7 @@ export function isProgressCondition(c: RuntimeCondition, cat: AuthoringCatalogue
   switch (c.kind) {
     case 'object_discovered': {
       const o = cat.objects.get(c.object);
-      return !!o && !o.gated;
+      return !!o && !o.gated && !!o.parent;
     }
     case 'object_state': {
       const o = cat.objects.get(c.object);
@@ -120,6 +125,9 @@ export function validateApprovedRule(rule: RuntimeRule, cat: AuthoringCatalogue,
 
   for (const c of rule.conditions) {
     if ((c.kind === 'object_discovered' || c.kind === 'object_state') && !cat.objects.has(c.object)) bad('RUNTIME_RULE_REFERENCE', `unknown object ${c.object}`);
+    else if (c.kind === 'object_discovered' && isOpenCaseRootObject(cat.objects.get(c.object))) {
+      bad('RUNTIME_RULE_CAUSALITY', `object ${c.object} is known from case open (non-gated root); an open-case grant is not a discovery`);
+    }
     if (c.kind === 'evidence_unlocked' && !cat.evidence.has(c.evidence)) bad('RUNTIME_RULE_REFERENCE', `unknown evidence ${c.evidence}`);
     if (c.kind === 'connection_validated' && !cat.approvedConnections.has(c.rule)) bad('RUNTIME_RULE_REFERENCE', `unknown or unapproved connection ${c.rule}`);
     if (c.kind === 'world_state' && !cat.worldStates.has(c.state)) bad('RUNTIME_RULE_REFERENCE', `unknown world state ${c.state}`);
@@ -133,8 +141,8 @@ export function validateApprovedRule(rule: RuntimeRule, cat: AuthoringCatalogue,
     if (e.kind === 'deliver_evidence') {
       const ev = cat.evidence.get(e.evidence);
       if (!ev) bad('RUNTIME_RULE_REFERENCE', `unknown evidence ${e.evidence}`);
-      else if (ev.requires.length !== 1 || ev.requires[0] !== RUNTIME_ONLY_REQUIRES[0]) {
-        bad('RUNTIME_RULE_CAUSALITY', `delivered material ${e.evidence} must be runtime-only (requires = {@RUNTIME})`);
+      else if (ev.requires.length !== 1 || ev.requires[0] !== RUNTIME_ONLY_REQUIRES[0] || ev.initial === true) {
+        bad('RUNTIME_RULE_CAUSALITY', `delivered material ${e.evidence} must be runtime-only (requires = {@RUNTIME}, not initial)`);
       }
     }
   }

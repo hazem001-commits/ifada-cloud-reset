@@ -172,3 +172,54 @@ test('draft rules are inert', () => {
   assert.equal(w.firings.size, 0);
   assert.equal(w.snapshot.leads.size, 0);
 });
+
+// ------------------------------------------------------------
+// RESET-1 hardening: open-case roots, lead promotion
+// ------------------------------------------------------------
+test('opening the case fires no object_discovered rule from an initial root (team or actor)', () => {
+  const rules: RuntimeRule[] = [
+    { id: 'ROOT_T', status: 'approved', scope: 'team', sortOrder: 1, conditions: [{ kind: 'object_discovered', object: 'ROOM_A' }], effects: [{ kind: 'open_lead', lead: 'L_X' }] },
+    { id: 'ROOT_A', status: 'approved', scope: 'actor', sortOrder: 2, conditions: [{ kind: 'object_discovered', object: 'ROOM_A' }], effects: [{ kind: 'open_lead', lead: 'L_Y' }] },
+    { id: 'ROOT_W', status: 'approved', scope: 'team', sortOrder: 3, conditions: [{ kind: 'object_discovered', object: 'ROOM_A' }], effects: [{ kind: 'reach_world_state', state: 'W_MAJOR' }] },
+  ];
+  const w = createWorld(OBJECTS, rules, [A, B]);
+  openInvestigation(w);
+  assert.equal(w.snapshot.objects.get('ROOM_A')?.discovered, true, 'seeded known');
+  runtimeSettle(w, A);
+  runtimeSettle(w, B);
+  assert.equal(w.firings.size, 0);
+  assert.equal(w.snapshot.leads.size, 0);
+  assert.equal(w.snapshot.world.size, 0);
+});
+
+test('a real non-initial root transition and a found child are progress at runtime', () => {
+  const rules: RuntimeRule[] = [
+    { id: 'SEAL', status: 'approved', scope: 'team', sortOrder: 1, conditions: [{ kind: 'object_state', object: 'ROOM_A', states: ['SEALED'] }], effects: [{ kind: 'reach_world_state', state: 'W_MAJOR' }] },
+    { id: 'CHILD', status: 'approved', scope: 'actor', sortOrder: 2, conditions: [{ kind: 'object_discovered', object: 'TRACE' }], effects: [{ kind: 'open_lead', lead: 'L_CHILD' }] },
+  ];
+  const w = createWorld(OBJECTS, rules, [A, B]);
+  openInvestigation(w);
+  interact(w, B, 'TRACE', 'DISCOVERED', { discover: true });
+  assert.equal(w.snapshot.leads.get('L_CHILD')?.holder, B);
+  interact(w, A, 'ROOM_A', 'SEALED');
+  assert.ok(w.snapshot.world.has('W_MAJOR'));
+});
+
+test('a team open_lead PROMOTES an existing private lead (one lead, holder kept); actor open never steals or downgrades', () => {
+  const rules: RuntimeRule[] = [
+    { id: 'PRIV', status: 'approved', scope: 'actor', sortOrder: 1, conditions: [{ kind: 'object_discovered', object: 'TRACE' }], effects: [{ kind: 'open_lead', lead: 'L_P' }] },
+    { id: 'TEAM', status: 'approved', scope: 'team', sortOrder: 2, conditions: [{ kind: 'object_state', object: 'ROOM_A', states: ['SEALED'] }], effects: [{ kind: 'open_lead', lead: 'L_P' }, { kind: 'open_lead', lead: 'L_T' }] },
+    { id: 'ACT_T', status: 'approved', scope: 'actor', sortOrder: 3, conditions: [{ kind: 'object_state', object: 'ROOM_A', states: ['SEALED'] }], effects: [{ kind: 'open_lead', lead: 'L_T' }] },
+  ];
+  const w = createWorld(OBJECTS, rules, [A, B]);
+  w.pulseCategories.set('lead:L_P', 'PERSON');
+  openInvestigation(w);
+  interact(w, B, 'TRACE', 'DISCOVERED', { discover: true });
+  shareObject(w, B, 'TRACE');
+  runtimeSettle(w, A); // A's actor rule cannot steal B's private lead
+  assert.deepEqual(w.snapshot.leads.get('L_P'), { holder: B, shared: false, status: 'open', followed: false });
+  interact(w, A, 'ROOM_A', 'SEALED');
+  assert.deepEqual(w.snapshot.leads.get('L_P'), { holder: B, shared: true, status: 'open', followed: false }, 'promoted');
+  assert.deepEqual(w.snapshot.leads.get('L_T'), { holder: null, shared: true, status: 'open', followed: false }, 'not downgraded');
+  assert.equal(w.pulses.filter((p) => p.sourceKey === 'lead:L_P').length, 1, 'promotion emits no second pulse');
+});

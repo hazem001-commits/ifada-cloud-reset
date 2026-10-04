@@ -125,8 +125,15 @@ test('world states are reached once and never un-reached', () => {
 // WORLD-STATE CAUSALITY INVARIANT
 // ------------------------------------------------------------
 const CAT: AuthoringCatalogue = {
-  objects: new Map([['SEARCH_AREA', { gated: false, initialState: 'UNKNOWN' }], ['HIDDEN_LEVEL', { gated: true, initialState: 'KNOWN' }]]),
-  evidence: new Map([['T-MED', { requires: ['@RUNTIME'] }], ['T-OLD', { requires: ['T-MED'] }], ['T-CLUE', { requires: [] }]]),
+  objects: new Map([
+    ['ROOM', { gated: false, initialState: 'KNOWN', parent: null }],
+    ['SEARCH_AREA', { gated: false, initialState: 'UNKNOWN', parent: 'ROOM' }],
+    ['HIDDEN_LEVEL', { gated: true, initialState: 'KNOWN', parent: null }],
+  ]),
+  evidence: new Map([
+    ['T-MED', { requires: ['@RUNTIME'] }], ['T-OLD', { requires: ['T-MED'] }], ['T-CLUE', { requires: [] }],
+    ['T-INIT-RT', { requires: ['@RUNTIME'], initial: true }],
+  ]),
   leads: new Map([['L_ROUTE', { label: 'someone used another route' }]]),
   worldStates: new Map([['W_FOUND', { major: true }], ['W_MINOR', { major: false }]]),
   approvedConnections: new Set(['CONN_A']),
@@ -180,6 +187,65 @@ test('causality: aftermath material can never cause the world state it follows (
   assert.ok(codes(validateApprovedRule(aftermath, CAT, [inverted])).includes('RUNTIME_RULE_CAUSALITY'));
   const selfRef = approved({ id: 'SELF', scope: 'team', conditions: [{ kind: 'world_state', state: 'W_FOUND' }], effects: [{ kind: 'reach_world_state', state: 'W_FOUND' }] });
   assert.ok(codes(validateApprovedRule(selfRef, CAT, [])).includes('RUNTIME_RULE_CAUSALITY'));
+});
+
+// ------------------------------------------------------------
+// OPEN-CASE GRANTS ARE NOT DISCOVERIES OR PROGRESS
+// ------------------------------------------------------------
+test('an open-case root is not a discovery: refused in object_discovered, never progress', () => {
+  for (const scope of ['team', 'actor'] as const) {
+    const r = approved({ id: 'ROOTDISC', scope, conditions: [{ kind: 'object_discovered', object: 'ROOM' }], effects: [{ kind: 'open_lead', lead: 'L_ROUTE' }] });
+    assert.deepEqual(codes(validateApprovedRule(r, CAT, [])), ['RUNTIME_RULE_CAUSALITY'], scope);
+  }
+  assert.equal(isProgressCondition({ kind: 'object_discovered', object: 'ROOM' }, CAT), false);
+  // an initial root cannot help reach a major world state
+  const major = approved({ id: 'ROOTMAJOR', scope: 'team', conditions: [{ kind: 'object_discovered', object: 'ROOM' }, { kind: 'evidence_unlocked', evidence: 'T-CLUE' }], effects: [{ kind: 'reach_world_state', state: 'W_FOUND' }] });
+  assert.ok(codes(validateApprovedRule(major, CAT, [])).every((c) => c === 'RUNTIME_RULE_CAUSALITY'));
+  assert.ok(validateApprovedRule(major, CAT, []).some((i) => /known from case open/.test(i.detail)));
+  assert.ok(validateApprovedRule(major, CAT, []).some((i) => /needs investigation progression/.test(i.detail)));
+  const atInitial = approved({ id: 'ROOTINIT', scope: 'team', conditions: [{ kind: 'object_state', object: 'ROOM', states: ['KNOWN'] }], effects: [{ kind: 'reach_world_state', state: 'W_FOUND' }] });
+  assert.deepEqual(codes(validateApprovedRule(atInitial, CAT, [])), ['RUNTIME_RULE_CAUSALITY']);
+  // a later REAL non-initial root transition is progress
+  const sealed = approved({ id: 'ROOTSEALED', scope: 'team', conditions: [{ kind: 'object_state', object: 'ROOM', states: ['SEALED'] }], effects: [{ kind: 'reach_world_state', state: 'W_FOUND' }] });
+  assert.deepEqual(validateApprovedRule(sealed, CAT, []), []);
+  // a genuinely discovered child is progress
+  assert.equal(isProgressCondition({ kind: 'object_discovered', object: 'SEARCH_AREA' }, CAT), true);
+  const child = approved({ id: 'CHILD', scope: 'team', conditions: [{ kind: 'object_discovered', object: 'SEARCH_AREA' }], effects: [{ kind: 'reach_world_state', state: 'W_FOUND' }] });
+  assert.deepEqual(validateApprovedRule(child, CAT, []), []);
+  // an evidence-driven gated reveal is real but never major-world progress
+  const reveal = approved({ id: 'EVREVEAL', scope: 'team', conditions: [{ kind: 'evidence_unlocked', evidence: 'T-CLUE' }], effects: [{ kind: 'reveal_object', object: 'HIDDEN_LEVEL' }] });
+  assert.deepEqual(validateApprovedRule(reveal, CAT, []), []);
+  const launder = approved({ id: 'LAUNDER', scope: 'team', conditions: [{ kind: 'object_discovered', object: 'HIDDEN_LEVEL' }, { kind: 'evidence_unlocked', evidence: 'T-CLUE' }], effects: [{ kind: 'reach_world_state', state: 'W_FOUND' }] });
+  assert.deepEqual(codes(validateApprovedRule(launder, CAT, [reveal])), ['RUNTIME_RULE_CAUSALITY']);
+});
+
+test('runtime mirror: an open-case root never satisfies object_discovered; a found child and a revealed gate do', () => {
+  const s = snap();
+  s.objects.set('GATE', { parent: null, state: 'KNOWN', discovered: true, discoveredBy: null, shared: true, gated: true, initialState: 'KNOWN' });
+  (s.catalogueParents as Map<string, string | null>).set('GATE', null);
+  for (const p of [{ kind: 'team' } as const, { kind: 'actor', userId: A } as const]) {
+    assert.equal(conditionHolds(s, { kind: 'object_discovered', object: 'ROOT' }, p), false, 'discovered = true alone is not a discovery');
+    assert.equal(conditionHolds(s, { kind: 'object_state', object: 'ROOT', states: ['KNOWN'] }, p), true, 'state conditions still read the root');
+    assert.equal(conditionHolds(s, { kind: 'object_discovered', object: 'TEAM' }, p), true);
+    assert.equal(conditionHolds(s, { kind: 'object_discovered', object: 'GATE' }, p), true);
+  }
+});
+
+test('delivered material can never be initial (open_case grants initial material regardless of requires)', () => {
+  const r = approved({ id: 'DI', scope: 'team', conditions: [{ kind: 'world_state', state: 'W_FOUND' }], effects: [{ kind: 'deliver_evidence', evidence: 'T-INIT-RT' }] });
+  assert.deepEqual(codes(validateApprovedRule(r, CAT, [])), ['RUNTIME_RULE_CAUSALITY']);
+});
+
+test('lead: a TEAM open promotes an existing private lead; a private open never steals or downgrades', () => {
+  const priv = applyLeadEvent(null, { kind: 'open', scope: 'actor', actor: A }) as LeadRecord;
+  const promoted = applyLeadEvent(priv, { kind: 'open', scope: 'team' }) as LeadRecord;
+  assert.deepEqual(promoted, { holder: A, shared: true, status: 'open', followed: false }, 'holder kept for provenance');
+  assert.equal(leadPhase(promoted), 'shared');
+  assert.deepEqual(applyLeadEvent(priv, { kind: 'open', scope: 'actor', actor: B }), priv, 'B cannot steal A’s private lead');
+  const team = applyLeadEvent(null, { kind: 'open', scope: 'team' }) as LeadRecord;
+  assert.deepEqual(applyLeadEvent(team, { kind: 'open', scope: 'actor', actor: A }), team, 'never downgraded');
+  const followed = { ...priv, status: 'followed' as const, followed: true };
+  assert.deepEqual(applyLeadEvent(followed, { kind: 'open', scope: 'team' }), { ...followed, shared: true }, 'promotion keeps progress');
 });
 
 test('scope: an actor (private) rule can never change the world or deliver material', () => {
