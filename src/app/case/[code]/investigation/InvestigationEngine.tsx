@@ -5,6 +5,11 @@
 // الفحص السياقي). المنطق أدناه (تحميل، realtime، معالجة، إجراءات)
 // هو نفسه — تغيّر العرض فقط.
 //
+// المزامنة (src/lib/realtime/objectSync): حدث صف أو بث "تغيّر شيء" من زميل
+// → إعادة جلب investigation_object_index (بوابة: جلب واحد بالتوازي، والإشارات
+// أثناءه تُدمج). محتوى الحدث لا يصبح حالة واجهة أبداً. بعد فعل خاص ناجح
+// نبثّ إشارة فارغة: اكتشاف الزميل الخاص لا يصل لغيره كحدث صف (RLS 022/026).
+//
 // يعتمد كلياً على RPCs آمنة: investigation_object_index،
 // execute_object_interaction، share_object_discovery، challenge_index،
 // object_workspace، run_challenge. كل فحص صلاحية بالسيرفر — هذا
@@ -17,7 +22,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { subscribeAuthenticated } from '@/lib/supabase/realtime';
+import { configureObjectSync, createRefetchGate, objectSyncTopic, signalObjectsChanged } from '@/lib/realtime/objectSync';
 import type { EvidenceItem } from '@/types/case';
 import type { InvestigationObject, ObjectWorkspace } from '@/types/investigationObjects';
 import { parseWorkspace, translateInteractionError } from '@/types/investigationObjects';
@@ -71,6 +78,9 @@ export default function InvestigationEngine({
   // عرض فقط: أي عنصر كان "قيد التحليل" بالقراءة السابقة وصار لا → "جاهز".
   const processingRef = useRef<Set<string>>(new Set());
   const pendingFocusRef = useRef<string | null>(initialFocus ?? null);
+  // قناة الجلسة المشتركة (للبث فقط بعد فعل ناجح مني) + بوابة الجلب.
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const refetchRef = useRef<{ trigger(): Promise<void> | void } | null>(null);
 
   const load = useCallback(async () => {
     const supabase = createClient();
@@ -129,18 +139,32 @@ export default function InvestigationEngine({
   }, [sessionId, load]);
 
   useEffect(() => {
-    return subscribeAuthenticated(
+    const gate = createRefetchGate(load);
+    refetchRef.current = gate;
+    const unsubscribe = subscribeAuthenticated(
       createClient(),
-      `investigation:${sessionId}`,
-      (channel) =>
-        channel.on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'session_object_state', filter: `session_id=eq.${sessionId}` },
-          () => void load(),
-        ),
-      () => void load(),
+      objectSyncTopic(sessionId),
+      (channel) => {
+        channelRef.current = channel;
+        return configureObjectSync(channel, sessionId, () => void gate.trigger());
+      },
+      () => void gate.trigger(),
     );
+    return () => {
+      gate.dispose();
+      unsubscribe();
+      channelRef.current = null;
+      if (refetchRef.current === gate) refetchRef.current = null;
+    };
   }, [sessionId, load]);
+
+  /** بعد فعل ناجح مني: جلبي الموثوق + إشارة فارغة لبقية الفريق. */
+  async function reloadAndSignal() {
+    const gate = refetchRef.current;
+    if (gate) await gate.trigger();
+    else await load();
+    signalObjectsChanged(channelRef.current, sessionId);
+  }
 
   const anyProcessing = objects.some((o) => o.processing);
   useEffect(() => {
@@ -174,7 +198,7 @@ export default function InvestigationEngine({
       p_interaction: interactionCode,
     });
     if (rpcError) flashError(translateInteractionError(rpcError.message));
-    else await load();
+    else await reloadAndSignal();
     setBusy(false);
   }
 
@@ -185,7 +209,7 @@ export default function InvestigationEngine({
       p_object_code: objectCode,
     });
     if (rpcError) flashError(translateInteractionError(rpcError.message));
-    else await load();
+    else await reloadAndSignal();
     setBusy(false);
   }
 
@@ -280,7 +304,7 @@ export default function InvestigationEngine({
               onAction={(code) => void runAction(focusedObject.code, code)}
               onShare={() => void share(focusedObject.code)}
               onAddToBoard={() => void addToBoard(focusedObject)}
-              onChallengeSolved={() => void load()}
+              onChallengeSolved={() => void reloadAndSignal()}
               onOpenEvidence={(code) => void openEvidence(code)}
               onFocus={focus}
               onClose={() => focus(null)}
