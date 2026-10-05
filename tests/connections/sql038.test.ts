@@ -160,12 +160,15 @@ test('chapter boundary: held material is runtime-only and nothing delivers it', 
   assert.match(CODE, /set gated = true\s+where case_id = 'room-714' and code = 'SECURITY_OFFICE'/);
 });
 
-test('verifiers are read-only; MIGRATIONS lists 038 as REVIEW ONLY — NOT APPLIED', () => {
+test('verifiers are read-only; MIGRATIONS lists 038 as LIVE + VERIFIED and never re-run', () => {
   for (const sql of [PRE, POST]) {
     const c = sql.replace(/--.*$/gm, '').replace(/'[^']*'/g, "''");
     assert.ok(!/\b(insert|update|delete|create|alter|drop|grant|revoke|truncate)\b\s/i.test(c));
   }
   const row = MIG.split('\n').find((l) => l.startsWith('| 38 |'));
   assert.ok(row, '038 row present');
-  assert.match(row!, /REVIEW ONLY — NOT APPLIED/);
+  // applied live by Hazem (85 post-apply checks passed): the doc must never invite a re-run
+  assert.match(row!, /APPLIED LIVE \+ VERIFIED/);
+  assert.match(row!, /Never re-run/);
+  assert.doesNotMatch(row!, /REVIEW ONLY — NOT APPLIED/);
 });
