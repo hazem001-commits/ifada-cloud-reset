@@ -354,17 +354,38 @@ test('new pieces land in a deterministic spiral (no randomness, no auto-grouping
 // ============================================================
 // (18) الهاتف بلا سحب دقيق · (19) حركة مخفّضة · (20) لا حقيقة سيرفر بالعميل
 // ============================================================
-test('18. mobile: every board action is reachable by tap — no drag required', () => {
+test('18. touch: the board stays a SPATIAL surface (not a list) and every action is reachable by tap', () => {
   const ui = readFileSync('src/app/case/[code]/board/InvestigationBoard.tsx', 'utf8');
-  const piece = readFileSync('src/app/case/[code]/board/BoardPiece.tsx', 'utf8');
-  assert.match(ui, /onPointerDown=\{mobile \? undefined :/, 'no drag handler in stack mode');
-  assert.match(piece, /onClick: layout === 'stack' \? onActivate : undefined/, 'tap selects in stack mode');
+  const touch = readFileSync('src/app/case/[code]/board/TouchBoard.tsx', 'utf8');
+  const css = readFileSync('src/app/case/[code]/board/board.module.css', 'utf8');
+  // no list fallback: phones render the same positioned pieces + threads inside a pannable world
+  assert.doesNotMatch(ui, /groupForStack|layout=\{mobile \? 'stack'/, 'phones never get a stacked evidence list');
+  assert.match(ui, /layout="canvas"/);
+  assert.match(ui, /<TouchBoard[\s\S]*threads=\{threadSvg\}[\s\S]*pieces=\{pieces\}/, 'touch board draws the shared threads and pieces');
+  assert.match(touch, /export const WORLD = \{ w: 1300, h: 820 \}/, 'fixed world: shared normalized positions, readable card size');
+  // gestures: tap = focus, hold = move, drag = pan, two fingers = zoom — never ambiguous with linking
+  assert.match(touch, /const HOLD_MS = \d+/);
+  assert.match(touch, /kind: 'pinch'/);
+  assert.match(touch, /if \(node && !linking\)/, 'no lift while choosing a link target');
+  assert.match(ui, /onPointerDown=\{mobile \? undefined :/, 'no desktop drag handler on touch pieces');
+  // linking is an explicit mode with a visible banner + cancel
+  assert.match(ui, /setLinking\(true\)\}[^>]*>اربط بمادة أخرى/);
+  assert.match(ui, /اختر ما تربطه بـ/);
+  assert.match(ui, /onClick=\{\(\) => void testSelection\(\)\}>\s*اختبر الرابط/, 'touch pair panel tests through the same single path');
+  // focus panel: explicit close, never under the browser chrome, readable relations
+  assert.match(ui, /aria-label="أغلق — عودة للوحة"/);
+  assert.match(css, /\.nodePanel \{[^}]*padding:[^;]*safe-area-inset-bottom/);
+  assert.match(css, /\.touchViewport \{[^}]*touch-action: none;/);
+  assert.match(css, /overflow: clip;/, 'focus never scrolls the camera frame');
+  // desktop keeps its toolbar + keyboard moves
   assert.match(ui, /role="toolbar" aria-label="أفعال على المواد المختارة"/);
   assert.match(ui, /ArrowUp: \[0, -step\]/, 'keyboard can move pieces without a pointer');
-  const css = readFileSync('src/app/case/[code]/board/board.module.css', 'utf8');
   assert.match(css, /@media \(max-width: 760px\)/);
-  assert.match(css, /\.stack \.context \{\s*position: fixed;/);
   assert.match(readFileSync('src/app/case/[code]/ui/ui.module.css', 'utf8'), /min-block-size: 2\.75rem;/, 'touch-safe controls (44px)');
+  for (const cls of ['zoomBtn', 'addFab', 'nodeClose', 'relRow', 'ledgerChip']) {
+    const block = css.slice(css.indexOf(`.${cls} {`), css.indexOf('}', css.indexOf(`.${cls} {`)));
+    assert.match(block, /(block-size|min-block-size): (2\.75|3\.5)rem/, `${cls}: ≥ 44px`);
+  }
 });
 
 test('19. reduced motion: board, shell and interrogation all disable their motion', () => {

@@ -3,7 +3,9 @@
 // لوحة التحقيق V2 — سطح تفكير مشترك يحمل مواد التحقيق نفسها.
 //
 //   مكتب:  مساحة مكانية — رفع/وضع المواد، خيوط، ممرات القضية، تكبير التركيز.
-//   هاتف:  حزمة مركّزة — المادة المختارة، المرتبطة بها، والأفعال الصريحة.
+//   لمس (هاتف/لوح): نفس السطح المكاني بكاميرا (TouchBoard) — تجوّل/قرصة،
+//          لمسة = تركيز بورقة سفلية، ضغط مطوّل = نقل، والربط وضع صريح.
+//          ليست قائمة: المواضع المشتركة نفسها، والخيوط مرئية.
 //
 // قواعد لا تُكسر:
 //   • السحب/الترتيب/الرسم لا يستدعي المدقق أبداً. فقط "اختبر الرابط".
@@ -15,7 +17,7 @@
 // ============================================================
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { subscribeAuthenticated } from '@/lib/supabase/realtime';
 import { getCaseContract } from '@/cases/registry';
@@ -29,7 +31,6 @@ import HypothesisSheet from './HypothesisSheet';
 import {
   focusCorridor,
   canReason,
-  laneOf,
   nextSpot,
   originTrace,
   threadValidated,
@@ -48,11 +49,14 @@ import {
   type ViewerCatalog,
 } from './boardModel';
 import JointStrip from './JointStrip';
+import TouchBoard, { type Cover, type TouchBoardHandle } from './TouchBoard';
+import Sheet from '../play/Sheet';
 import { activeProposal, alreadyMine, canContribute, type JointProposal, type JointRef } from './jointModel';
 import { BOARD_TABLES, createBoardStore, shouldSettle, type BoardClient, type ConnectionState, type SettleReason, type TestOutcome } from './boardStore';
 import s from './board.module.css';
 
-const MOBILE_QUERY = '(max-width: 760px)';
+// لمس: الهاتف، واللوح العمودي/الصغير بإصبع (السطح نفسه بكاميرا لمس).
+const MOBILE_QUERY = '(max-width: 760px), (pointer: coarse) and (max-width: 1100px)';
 function subscribeMedia(cb: () => void) {
   const mq = window.matchMedia(MOBILE_QUERY);
   mq.addEventListener('change', cb);
@@ -60,7 +64,7 @@ function subscribeMedia(cb: () => void) {
 }
 const isMobileNow = () => window.matchMedia(MOBILE_QUERY).matches;
 
-type Panel = 'none' | 'tray' | 'compose' | 'sheet' | 'trace';
+type Panel = 'none' | 'tray' | 'compose' | 'sheet' | 'trace' | 'add' | 'ledger';
 
 const THREAD_WORD: Record<ThreadKind, string> = { tentative: 'رابط مؤقت', support: 'إسناد', tension: 'توتر' };
 const NEUTRAL = 'لم يثبت هذا الرابط بعد.';
@@ -117,6 +121,14 @@ export default function InvestigationBoard({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<Record<string, { x: number; y: number }>>({});
   const [lifted, setLifted] = useState<string | null>(null);
+  /** لمس: وضع الربط الصريح — المادة التالية الملموسة تنضم للاختيار. */
+  const [linking, setLinking] = useState(false);
+  const touchRef = useRef<TouchBoardHandle>(null);
+  /** لمس: اللوحة تملأ ما تحت رأس القضية بالضبط (100dvh − موضعها). */
+  const [touchTop, setTouchTop] = useState<number | null>(null);
+  const measureTouch = useCallback((el: HTMLElement | null) => {
+    if (el) setTouchTop(Math.round(el.getBoundingClientRect().top + window.scrollY));
+  }, []);
 
   const stageRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ id: string; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
@@ -582,6 +594,16 @@ export default function InvestigationBoard({
     void store.move(item.id, x, y);
   }
 
+  /** لمس + لوحة مفاتيح خارجية: Enter/Space = نفس اللمسة (تركيز/ربط). */
+  function onTouchKey(e: KeyboardEvent<HTMLDivElement>, item: BoardItem) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    if (linking) {
+      setLinking(false);
+      if (!selection.includes(item.id)) setSelection([...selection, item.id]);
+    } else setSelection([item.id]);
+  }
+
   // ---------- Escape بالترتيب: ورقة/دُرج → تركيز → اختيار → نتيجة ----------
   useEffect(() => {
     if (examining) return; // غرفة الفحص تتولى Escape بنفسها
@@ -589,7 +611,8 @@ export default function InvestigationBoard({
       if (e.key !== 'Escape' || e.defaultPrevented) return;
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-      if (panel !== 'none') {
+      if (linking) setLinking(false);
+      else if (panel !== 'none') {
         const examined = sheetFor;
         setPanel('none');
         setSheetFor(null);
@@ -605,7 +628,7 @@ export default function InvestigationBoard({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [examining, panel, sheetFor, focusId, selection.length, result]);
+  }, [examining, panel, sheetFor, focusId, selection.length, result, linking]);
 
   // ---------- عرض ----------
   if (failed) return <SurfaceState variant="error" title="تعذّر فتح لوحة التحقيق.">أعد تحميل الصفحة.</SurfaceState>;
@@ -857,13 +880,325 @@ export default function InvestigationBoard({
       selected={selected.includes(item.id)}
       dimmed={!!corridor && !corridor.items.has(item.id)}
       lifted={lifted === item.id}
-      layout={mobile ? 'stack' : 'canvas'}
+      layout="canvas"
       position={pos(item)}
+      // لمس: الإيماءات كلها في TouchBoard (لمسة/ضغط مطوّل/تجوّل) — لا سحب هنا.
       onPointerDown={mobile ? undefined : (e) => onPiecePointerDown(e, item)}
-      onKeyDown={(e) => onPieceKey(e, item)}
+      onKeyDown={(e) => (mobile ? onTouchKey(e, item) : onPieceKey(e, item))}
       onActivate={() => toggle(item.id)}
     />
   ));
+
+  /** خيط يلمس المختار: يبقى حاداً؛ غيره يخفت (بلا ممر تركيز مفعّل). */
+  const touchesSelection = (t: BoardThread) => selected.length > 0 && (selected.includes(t.from) || selected.includes(t.to));
+  const threadSvg = (
+    <svg className={s.threads} viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      {board.threads.map((t) => {
+        const a = byId.get(t.from);
+        const b = byId.get(t.to);
+        if (!a || !b) return null;
+        const pa = pos(a.item);
+        const pb = pos(b.item);
+        return (
+          <line
+            key={t.id}
+            className={s.thread}
+            data-kind={t.kind}
+            data-validated={isValidated(t)}
+            data-dim={(!!corridor && !corridor.threads.has(t.id)) || (mobile && selected.length > 0 && !touchesSelection(t))}
+            data-hot={mobile && touchesSelection(t)}
+            x1={pa.x * 100}
+            y1={pa.y * 100}
+            x2={pb.x * 100}
+            y2={pb.y * 100}
+          />
+        );
+      })}
+    </svg>
+  );
+  const threadList = (
+    <ul className={s.srOnly} aria-label="الخيوط على اللوحة">
+      {board.threads.map((t) => {
+        const a = byId.get(t.from);
+        const b = byId.get(t.to);
+        return a && b ? (
+          <li key={t.id}>
+            {isValidated(t) ? 'رابط مثبت' : THREAD_WORD[t.kind]}: {describe(a.item, a.view)} ↔ {describe(b.item, b.view)}
+          </li>
+        ) : null;
+      })}
+    </ul>
+  );
+
+  if (mobile) {
+    const title = (e: { item: BoardItem; view: MaterialView | null }) => (e.item.kind === 'material' ? (e.view?.title ?? '') : e.item.text);
+    const relationsOf = (id: string) =>
+      board.threads
+        .filter((t) => t.from === id || t.to === id)
+        .map((t) => ({ t, other: byId.get(t.from === id ? t.to : t.from) }))
+        .filter((r): r is { t: BoardThread; other: NonNullable<typeof r.other> } => !!r.other);
+    const between = selected.length >= 2 ? board.threads.filter((t) => selected.includes(t.from) && selected.includes(t.to)) : [];
+    const relWord = (t: BoardThread) => (isValidated(t) ? 'رابط مثبت' : THREAD_WORD[t.kind]);
+
+    const nodePanel = selected.length > 0 && !linking && panel === 'none' && (
+      <section className={s.nodePanel} data-board-ui="true" aria-label={single ? describe(single.item, single.view) : 'ربط مواد مختارة'}>
+        <span className={s.nodeGrip} aria-hidden="true" />
+        <button type="button" className={s.nodeClose} onClick={() => setSelection([])} aria-label="أغلق — عودة للوحة">
+          <span aria-hidden="true">×</span>
+        </button>
+        {single ? (
+          <>
+            <header className={s.nodeHead}>
+              <p className={s.nodeKicker}>{describe(single.item, single.view).split(':')[0]}</p>
+              <h3 className={s.nodeTitle}>{title(single)}</h3>
+              {single.view?.kind === 'evidence' && single.view.access === 'restricted' && <p className={s.nodeNote}>محجوب عنك — يقرؤه زميلك صاحب التخصص.</p>}
+              {single.item.kind !== 'material' && <p className={s.nodeNote}>{single.item.authorId === myId ? 'كتبتَها أنت — تفكير الفريق، ليس حقيقة من القضية.' : `كتبها ${nameOf(single.item.authorId) ?? 'زميل'} — تفكير الفريق، ليس حقيقة من القضية.`}</p>}
+            </header>
+            <div className={s.nodePrimary}>
+              <Act onClick={() => setLinking(true)} primary>اربط بمادة أخرى</Act>
+              {single.item.kind === 'hypothesis' &&
+                <Act onClick={() => {
+                  remember();
+                  setSheetFor(single.item.id);
+                  setPanel('sheet');
+                }}>اختبر الفرضية</Act>}
+              {single.view?.kind === 'evidence' && <Act onClick={() => openEvidence(single.view!)}>افتح الدليل</Act>}
+            </div>
+            {(() => {
+              const rels = relationsOf(single.item.id);
+              return rels.length > 0 ? (
+                <div className={s.nodeRels}>
+                  <p className={s.nodeLabel}>مرتبط به</p>
+                  <ul className={s.relList}>
+                    {rels.map(({ t, other }) => (
+                      <li key={t.id}>
+                        <button type="button" className={s.relRow} data-validated={isValidated(t)} data-kind={t.kind} onClick={() => setSelection([single.item.id, other.item.id])}>
+                          <span className={s.relKind}>{relWord(t)}</span>
+                          <span className={s.relTitle}>{title(other)}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className={s.nodeNote}>لا خيط يربطها بعد.</p>
+              );
+            })()}
+            <div className={s.nodeMore}>
+              {offerContribute && <Act onClick={() => void contributeSelected()} disabled={busy}>ساهم بهذا الدليل</Act>}
+              {single.view && <Act onClick={() => returnToSource(single.view!)}>ارجع لمصدره</Act>}
+              {single.view && <Act onClick={() => openPanel('trace')}>من أين أتت؟</Act>}
+              {(single.item.kind === 'hypothesis' || single.item.kind === 'question') &&
+                <Act onClick={() => setFocusId(focusId === single.item.id ? null : single.item.id)}>{focusId === single.item.id ? 'اخرج من التركيز' : 'ركّز على هذا الخط'}</Act>}
+              {single.item.kind !== 'material' && single.item.authorId === myId && <Act onClick={() => startEdit(single.item)}>عدّل</Act>}
+              {(single.item.kind === 'material' || single.item.authorId === myId) && <Act onClick={() => void removeSelected()} disabled={busy}>أزل عن اللوحة</Act>}
+            </div>
+          </>
+        ) : (
+          <>
+            <header className={s.nodeHead}>
+              <p className={s.nodeKicker}>ربط {selected.length.toLocaleString('ar')} مواد</p>
+              <h3 className={s.pairTitle}>
+                {selEntries.map((e, i) => (
+                  <span key={e.item.id}>
+                    {i > 0 && <span className={s.pairJoin} aria-hidden="true"> ↔ </span>}
+                    {title(e)}
+                  </span>
+                ))}
+              </h3>
+              <p className={s.nodeNote}>{between.length > 0 ? `بينها الآن: ${[...new Set(between.map(relWord))].join('، ')}` : 'لا خيط بينها بعد. الربط هنا تفكير — الاختبار وحده يسأل القضية.'}</p>
+              {restrictedSelected && <p className={s.nodeNote}>المادة المحجوبة يختبرها من يقرؤها.</p>}
+            </header>
+            <div className={s.nodePrimary}>
+              {proposal && (
+                <button type="button" className={toolClass} data-primary="true" disabled={busy} onClick={() => void testSelection()}>
+                  اختبر الرابط
+                </button>
+              )}
+              {between.length === 0 && <Act onClick={() => void linkSelected('tentative')} primary={!proposal} disabled={busy}>اربط مؤقتاً</Act>}
+              {hyps.length === 1 && <Act onClick={() => void linkSelected('support')} disabled={busy}>أسند للفرضية</Act>}
+              {hyps.length === 1 && <Act onClick={() => void linkSelected('tension')} disabled={busy}>علّم كتوتر</Act>}
+            </div>
+            <div className={s.nodeMore}>
+              <Act onClick={() => setLinking(true)}>أضف مادة أخرى للربط</Act>
+              {myThreadsBetween.length > 0 && <Act onClick={() => void unlinkSelected()} disabled={busy}>افصل الخيط</Act>}
+              <Act onClick={() => setSelection([])}>ابدأ من جديد</Act>
+            </div>
+          </>
+        )}
+      </section>
+    );
+
+    const sourceTitle = selEntries.length > 0 ? title(selEntries[selEntries.length - 1]!) : '';
+    const linkBanner = linking && (
+      <div className={s.linkBanner} data-board-ui="true" role="status">
+        <span className={s.linkDot} aria-hidden="true" />
+        <span className={s.linkText}>
+          اختر ما تربطه بـ <strong>«{sourceTitle}»</strong>
+        </span>
+        <button type="button" className={toolClass} onClick={() => setLinking(false)}>
+          إلغاء
+        </button>
+      </div>
+    );
+
+    /** أين تقع ورقة التركيز (مرآة board.module.css): أسفل على الهاتف، يسار على الأعرض. */
+    const panelCover = (bottomShare: number): Cover =>
+      window.innerWidth > 760 ? { left: Math.min(window.innerHeight <= 600 ? 0.48 * window.innerWidth : 416, 0.5 * window.innerWidth) + 16 } : { bottom: window.innerHeight * bottomShare };
+    const tapNode = (id: string) => {
+      if (linking) {
+        setLinking(false);
+        if (!selected.includes(id)) setSelection([...selected, id]);
+        const from = selEntries[selEntries.length - 1];
+        const to = byId.get(id);
+        if (from && to) touchRef.current?.revealPair(pos(from.item), pos(to.item), panelCover(0.36));
+        return;
+      }
+      setSelection([id]);
+      const e = byId.get(id);
+      if (e) touchRef.current?.reveal(pos(e.item), panelCover(0.44));
+    };
+
+    return (
+      <main ref={measureTouch} className={`${s.board} ${s.touch}`} aria-label="لوحة التحقيق" style={touchTop !== null ? { height: `calc(100dvh - ${touchTop}px)` } : undefined}>
+        <div className={s.touchTop}>
+          {/* التبويب النشط يقول "لوحة التحقيق" أصلاً — هنا سطر واحد فقط */}
+          <strong className={s.touchTitle}>{focusId && byId.get(focusId) ? 'ممر التركيز' : 'سطح التفكير المشترك'}</strong>
+          <button type="button" className={s.ledgerChip} onClick={() => openPanel('ledger')} data-has={ledger.connections.length > 0 ? 'true' : 'false'}>
+            <span className={s.ledgerDot} aria-hidden="true" />
+            روابط مثبتة <span className={s.ledgerNum}>{ledger.connections.length.toLocaleString('ar')}</span>
+          </button>
+        </div>
+
+        <JointStrip
+          ref={jointRef}
+          proposals={joint}
+          catalog={catalog}
+          myId={myId}
+          nameOf={nameOf}
+          busy={busy}
+          onWithdraw={(p, ref) => void withdrawJoint(p, ref)}
+          onClose={(p) => void closeJoint(p)}
+          onTest={(p) => void testJoint(p)}
+        />
+
+        <div className={s.touchStage}>
+          <TouchBoard
+            handleRef={touchRef}
+            items={board.items.map(({ item }) => ({ id: item.id, ...pos(item) }))}
+            lanes={boardLanes}
+            threads={threadSvg}
+            pieces={pieces}
+            linking={linking}
+            onTapNode={tapNode}
+            onTapEmpty={() => {
+              if (!linking) setSelection([]);
+            }}
+            onMove={(id, x, y, commit) => {
+              if (!commit) return setOverrides((prev) => ({ ...prev, [id]: { x, y } }));
+              setItems((prev) => prev.map((it) => (it.id === id ? { ...it, x, y } : it)));
+              setOverrides((prev) => {
+                const next = { ...prev };
+                delete next[id];
+                return next;
+              });
+              void store.move(id, x, y);
+            }}
+            controls={
+              selected.length === 0 &&
+              !linking && (
+                <button type="button" className={s.addFab} data-board-ui="true" onClick={() => openPanel('add')} aria-label="أضف إلى اللوحة: مادة أو فكرة">
+                  <span aria-hidden="true">+</span>
+                </button>
+              )
+            }
+            overlay={
+              board.items.length === 0 && (
+                <div className={s.touchEmpty} data-board-ui="true">
+                  <strong>اللوحة فارغة.</strong>
+                  <p>ضعوا عليها مادة يعرفها الفريق أو اكتبوا سؤالاً — من زر «+».</p>
+                  <p className={s.touchEmptyHint}>المس لتختار · اضغط مطوّلاً لتنقل · اسحب لتتجوّل · قرّب بإصبعين</p>
+                </div>
+              )
+            }
+          />
+          {threadList}
+          {linkBanner}
+          {nodePanel}
+        </div>
+
+        <Sheet open={panel === 'add'} title="أضف إلى اللوحة" kicker="سطح التفكير المشترك" onClose={closePanel}>
+          <div className={s.addChoices}>
+            <button type="button" className={s.addChoice} onClick={() => setPanel('tray')}>
+              <strong>مادة من التحقيق</strong>
+              <span>ما يعرفه الفريق يُثبَّت للجميع — اكتشافك الخاص يُشارَك أولاً.</span>
+            </button>
+            <button
+              type="button"
+              className={s.addChoice}
+              onClick={() => {
+                setEditingId(null);
+                setComposeText('');
+                setPanel('compose');
+              }}
+            >
+              <strong>فكرة للفريق</strong>
+              <span>سؤال، فرضية، أو حقيقة سجّلتموها — تفكير، ليس حقيقة من القضية.</span>
+            </button>
+          </div>
+        </Sheet>
+
+        <Sheet open={panel === 'ledger'} title="روابط أثبتها الفريق" kicker="ما أكّدته القضية" onClose={closePanel}>
+          <div ref={ledgerRef} tabIndex={-1} className={s.ledgerSheet}>
+            {ledger.connections.length === 0 ? (
+              <p className={s.drawerHint}>لا رابط مثبت بعد. اختاروا مادتين واختبروا الرابط.</p>
+            ) : (
+              <ul className={s.relList}>
+                {ledger.connections.map((c, i) => (
+                  <li key={i} className={s.ledgerRow}>
+                    {c.meaning}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className={s.nodeLabel}>لغة الخيوط</p>
+            <ul className={s.legendList}>
+              <li data-kind="tentative">متقطع — رابط مؤقت</li>
+              <li data-kind="support">رفيع — إسناد لفرضية</li>
+              <li data-kind="tension">نقطي — توتر</li>
+              <li data-kind="validated">نحاسي صلب — رابط مثبت</li>
+            </ul>
+          </div>
+        </Sheet>
+
+        {panel === 'tray' && tray}
+        {panel === 'compose' && composer}
+        {panel === 'trace' && tracePanel}
+        {panel === 'sheet' && hypothesisEntry && hypothesisEntry.item.kind === 'hypothesis' && (
+          <HypothesisSheet
+            sessionId={sessionId}
+            hypothesis={hypothesisEntry.item.text}
+            attached={attachedIds}
+            attachedCount={attachedIds.length}
+            onClose={closePanel}
+            onCite={cite}
+          />
+        )}
+
+        {result && (
+          <div className={s.result} data-status={result.status} role="status" aria-live="polite">
+            {result.status === 'validated' && <span className={s.resultLabel}>رابط مثبت</span>}
+            {result.text}
+            <button type="button" className={s.resultClose} onClick={() => setResult(null)} aria-label="إغلاق">
+              ×
+            </button>
+          </div>
+        )}
+
+        {examining && <EvidenceExaminationRoom key={examining.code} sessionId={sessionId} item={examining} onClose={() => setExamining(null)} />}
+      </main>
+    );
+  }
 
   return (
     <main className={s.board} aria-label="لوحة التحقيق">
@@ -918,37 +1253,7 @@ export default function InvestigationBoard({
       />
 
       <div className={s.workspace}>
-        {mobile ? (
-          <div className={s.stack}>
-            {board.items.length === 0 && (
-              <SurfaceState variant="empty" title="اللوحة فارغة.">
-                ضعوا عليها مادة يعرفها الفريق، أو اكتبوا سؤالاً.
-              </SurfaceState>
-            )}
-            {groupForStack(board.items, boardLanes, pos).map((g) => (
-              <section key={g.label} aria-label={g.label} style={{ display: 'grid', gap: '0.5rem' }}>
-                <h3 className={s.stackGroup}>{g.label}</h3>
-                {g.ids.map((id) => pieces.find((p) => p.key === id))}
-              </section>
-            ))}
-            {single && (
-              <section aria-label="مرتبط بالمختار" style={{ display: 'grid', gap: '0.35rem' }}>
-                <h3 className={s.stackGroup}>مرتبط به</h3>
-                {board.threads
-                  .filter((t) => t.from === single.item.id || t.to === single.item.id)
-                  .map((t) => {
-                    const other = byId.get(t.from === single.item.id ? t.to : t.from);
-                    return other ? (
-                      <p key={t.id} className={s.drawerHint}>
-                        {isValidated(t) ? 'مثبت' : THREAD_WORD[t.kind]} — {describe(other.item, other.view)}
-                      </p>
-                    ) : null;
-                  })}
-              </section>
-            )}
-            {contextBar}
-          </div>
-        ) : (
+        {(
           <div ref={stageRef} className={s.stage} onPointerMove={onStagePointerMove} onPointerUp={onStagePointerUp} onPointerCancel={onStagePointerUp}>
             {boardLanes.length > 0 && (
               <div className={s.lanes} aria-hidden="true">
@@ -959,39 +1264,8 @@ export default function InvestigationBoard({
                 ))}
               </div>
             )}
-            <svg className={s.threads} viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-              {board.threads.map((t) => {
-                const a = byId.get(t.from);
-                const b = byId.get(t.to);
-                if (!a || !b) return null;
-                const pa = pos(a.item);
-                const pb = pos(b.item);
-                return (
-                  <line
-                    key={t.id}
-                    className={s.thread}
-                    data-kind={t.kind}
-                    data-validated={isValidated(t)}
-                    data-dim={!!corridor && !corridor.threads.has(t.id)}
-                    x1={pa.x * 100}
-                    y1={pa.y * 100}
-                    x2={pb.x * 100}
-                    y2={pb.y * 100}
-                  />
-                );
-              })}
-            </svg>
-            <ul className={s.srOnly} aria-label="الخيوط على اللوحة">
-              {board.threads.map((t) => {
-                const a = byId.get(t.from);
-                const b = byId.get(t.to);
-                return a && b ? (
-                  <li key={t.id}>
-                    {isValidated(t) ? 'رابط مثبت' : THREAD_WORD[t.kind]}: {describe(a.item, a.view)} ↔ {describe(b.item, b.view)}
-                  </li>
-                ) : null;
-              })}
-            </ul>
+            {threadSvg}
+            {threadList}
             {pieces}
             {board.items.length === 0 && (
               <SurfaceState variant="empty" title="اللوحة فارغة.">
@@ -1029,21 +1303,11 @@ export default function InvestigationBoard({
   );
 }
 
-/** تجميع القائمة على الهاتف: بممرات القضية إن وُجدت، وإلا مواد ثم أفكار. */
-function groupForStack(
-  entries: { item: BoardItem; view: MaterialView | null }[],
-  lanes: readonly { id: string; label: string }[],
-  pos: (item: BoardItem) => { x: number; y: number },
-): { label: string; ids: string[] }[] {
-  if (lanes.length > 0) {
-    return lanes
-      .map((l) => ({ label: l.label, ids: entries.filter((e) => laneOf(pos(e.item).x, lanes)?.id === l.id).map((e) => e.item.id) }))
-      .filter((g) => g.ids.length > 0);
-  }
-  const materials = entries.filter((e) => e.item.kind === 'material').map((e) => e.item.id);
-  const thoughts = entries.filter((e) => e.item.kind !== 'material').map((e) => e.item.id);
-  return [
-    { label: 'أفكار الفريق', ids: thoughts },
-    { label: 'المواد', ids: materials },
-  ].filter((g) => g.ids.length > 0);
+/** زر فعل في ورقة اللمس — نفس أداة السطح (toolClass) وهدف 44px. */
+function Act({ children, onClick, primary, disabled }: { children: ReactNode; onClick: () => void; primary?: boolean; disabled?: boolean }) {
+  return (
+    <button type="button" className={toolClass} data-primary={primary ? 'true' : undefined} disabled={disabled} onClick={onClick}>
+      {children}
+    </button>
+  );
 }
