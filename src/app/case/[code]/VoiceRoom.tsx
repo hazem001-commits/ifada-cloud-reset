@@ -169,19 +169,22 @@ export default function VoiceRoom({
           className="btn btn-quiet"
           onClick={connect}
           disabled={connecting}
+          aria-label={connecting ? "عم نوصل…" : "ادخل غرفة الصوت"}
         >
-          {connecting ? "عم نوصل…" : "🎙 ادخل غرفة الصوت"}
+          <span aria-hidden="true">🎙</span>
+          <span className="voice-label">{connecting ? " عم نوصل…" : " ادخل غرفة الصوت"}</span>
         </button>
       ) : (
         <>
-          <button className="btn btn-quiet" onClick={toggleMute}>
-            {muted ? "🔇 مكتوم" : "🎙 مفتوح"}
+          <button className="btn btn-quiet" onClick={toggleMute} aria-label={muted ? "الميكروفون مكتوم — افتحه" : "الميكروفون مفتوح — اكتمه"}>
+            <span aria-hidden="true">{muted ? "🔇" : "🎙"}</span>
+            <span className="voice-label">{muted ? " مكتوم" : " مفتوح"}</span>
           </button>
           <button className="btn btn-quiet" onClick={disconnect}>
             اخرج
           </button>
 
-          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+          <div className="voice-speakers" style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
             {speakers.map((s) => (
               <span
                 key={s.identity}

@@ -981,3 +981,61 @@
     animation: none !important;
   }
 }
+
+/* ============================================================
+   الهاتف: المشهد هو سطح اللعب. لوحة الموقع شريط مضغوط بالأعلى
+   (عنوان سطر واحد + وصف بسطرين)، لا تتقاطع مع زر "اسأل التحقيق"
+   (أيقونة 44px بالزاوية المقابلة)، والصورة تبدأ تحتها مباشرة.
+   ============================================================ */
+@media (max-width: 759px) {
+  .plaque {
+    top: 0.75rem;
+    inset-inline-start: 1rem;
+    max-width: calc(100% - 2rem - 3.25rem);
+    gap: 0.15rem;
+  }
+
+  .plaqueHere {
+    font-size: 1rem;
+    line-height: 1.35;
+  }
+
+  .plaqueNote {
+    max-width: none;
+    font-size: 0.76rem;
+    line-height: 1.55;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+  }
+
+  .plaqueRoute {
+    min-height: 2.75rem;
+  }
+}
+
+/* الغرفة ظاهرة واللقطة القريبة خيار: الشريط وحده يلتقط اللمس، بزاوية
+   المساحة الحرة (بداية السطر، أعلى) — الجسم المفحوص يتوسطها فلا يُغطّى هو
+   ولا اكتشافاته الفرعية. */
+.closeUp[data-room='true'] {
+  grid-template-rows: auto;
+  align-content: start;
+  justify-items: start;
+}
+
+.closeUp[data-room='true'] .closeUpBar {
+  align-self: start;
+}
+
+@media (max-width: 759px) {
+  .closeUp[data-room='true'] .closeUpBar {
+    padding: 0.15rem 0.35rem;
+  }
+
+  .closeUpView,
+  .closeUpToggle {
+    min-height: 2.75rem;
+  }
+}

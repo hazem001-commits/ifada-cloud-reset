@@ -671,3 +671,26 @@
     transition: none;
   }
 }
+
+/* الهاتف: ملف القضية يبدأ بالمادة لا بالترويسة — عنوان أصغر، فراغات أقصر،
+   والمادة التالية تحت الضوء تظهر مع أول بطاقة قبل أي تمرير طويل. */
+@media (max-width: 600px) {
+  .file {
+    padding-top: 1rem;
+  }
+
+  .header {
+    gap: 0.75rem;
+    padding-bottom: 1rem;
+  }
+
+  .headerTitle {
+    font-size: 1.65rem;
+  }
+
+  .spotlight {
+    gap: 1rem;
+    margin-bottom: 2rem;
+    padding-bottom: 1.75rem;
+  }
+}

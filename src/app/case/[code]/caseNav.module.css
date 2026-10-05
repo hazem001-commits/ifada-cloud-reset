@@ -71,10 +71,36 @@
   gap: var(--sp-2);
   min-width: 0;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 1rem;
   scrollbar-width: none;
-  /* حافة نهاية السطر (يسار RTL) تتلاشى: تبويبات مخفية تُلمَّح، لا تُقصّ */
-  mask-image: linear-gradient(to left, transparent, #000 2rem);
-  -webkit-mask-image: linear-gradient(to left, transparent, #000 2rem);
+}
+
+.nav::-webkit-scrollbar {
+  display: none;
+}
+
+/* الحافة تتلاشى فقط حيث يوجد المزيد: تلميح مقصود، لا قصّ عرَضي.
+   RTL: البداية يمين، النهاية يسار. */
+.nav[data-more='end'] {
+  mask-image: linear-gradient(to left, transparent, #000 2.5rem);
+  -webkit-mask-image: linear-gradient(to left, transparent, #000 2.5rem);
+}
+
+.nav[data-more='start'] {
+  mask-image: linear-gradient(to right, transparent, #000 2.5rem);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 2.5rem);
+}
+
+.nav[data-more='both'] {
+  mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
+}
+
+.step,
+.tab {
+  scroll-snap-align: start;
 }
 
 .group {
@@ -206,10 +232,56 @@
   }
 }
 
-/* الهاتف: الهوية + الفريق + الصوت بصف واحد بلا تداخل؛ الصوت مضغوط. */
+/* الهاتف: صفّان مقصودان — (الهوية · الفريق · الصوت) ثم شريط أقسام يُمرَّر.
+   رأس قصير: المشهد هو سطح اللعب، والرأس لا يأكل ربع الشاشة. */
 @media (max-width: 600px) {
   .bar {
-    gap: var(--sp-3);
+    gap: 0 var(--sp-3);
+    padding-top: calc(env(safe-area-inset-top, 0px) + 0.2rem);
+    padding-inline: 1rem;
+  }
+
+  /* الهوية لا تُدفع خارج الرأس أبداً (نبضة حية بجانبها مثلاً) */
+  .identity {
+    gap: 0;
+    min-width: 4.75rem;
+  }
+
+  .aside {
+    min-width: 0;
+  }
+
+  .caseTitle {
+    font-size: 0.95rem;
+  }
+
+  /* تبويبات الهاتف: هدف لمس 44px، أسهم المسار تتنحّى (الترتيب نفسه يحكيها) */
+  .nav {
+    margin-inline: -1rem;
+    padding-inline: 0.5rem;
+  }
+
+  .tab {
+    min-height: 2.75rem;
+    padding: 0 0.7rem;
+  }
+
+  .core .tab {
+    font-size: 0.9rem;
+  }
+
+  .later .tab {
+    padding: 0 0.55rem;
+    font-size: 0.8rem;
+  }
+
+  .tab::after {
+    inset-inline: 0.7rem;
+    height: 2px;
+  }
+
+  .flowSep {
+    display: none;
   }
 
   .aside {
@@ -221,14 +293,19 @@
     display: none;
   }
 
+  /* الصوت على الهاتف: أيقونة بهدف لمس 44px (التسمية للقارئ الآلي)؛
+     من يتكلم يظهر أصلاً في حضور الفريق — لا شرائح أسماء تزاحم الرأس */
   .aside :global(.case-voice .btn) {
-    min-height: 2.25rem;
-    padding: 0.2rem 0.6rem;
-    font-size: 0.72rem;
-    max-width: 7.5rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    padding: 0 0.55rem;
+    font-size: 1rem;
     white-space: nowrap;
+  }
+
+  .aside :global(.case-voice .voice-label),
+  .aside :global(.case-voice .voice-speakers) {
+    display: none;
   }
 }
 
@@ -254,4 +331,32 @@
 
 .archive {
   opacity: 0.7;
+}
+
+/* هاتف أفقي / شاشة قصيرة: الرأس صف واحد (الهوية · الأقسام · الفريق)؛
+   المشهد لا يُعصر تحت رأس بصفّين. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .bar {
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+    padding-top: 0;
+    gap: var(--sp-3);
+  }
+
+  .nav {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .caseMeta {
+    display: none;
+  }
+
+  .flowSep {
+    display: none;
+  }
+
+  .aside :global(.case-voice .voice-label),
+  .aside :global(.case-voice .voice-speakers) {
+    display: none;
+  }
 }

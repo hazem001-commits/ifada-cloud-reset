@@ -101,3 +101,12 @@
     transition: none;
   }
 }
+
+/* الهاتف (عمودي أو أفقي): سطر وقت رفيع — جو القضية حاضر بلا أن يأكل من المشهد */
+@media (max-width: 600px), (max-height: 500px) and (orientation: landscape) {
+  .bar {
+    min-height: 1.6rem;
+    padding: 0.15rem 1rem;
+    font-size: 0.7rem;
+  }
+}

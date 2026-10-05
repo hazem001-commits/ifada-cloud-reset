@@ -87,7 +87,8 @@ export default function TeamPresence() {
                 <span className={s.tagName}>{p.isMe ? 'أنت' : p.name}</span>
                 {p.live && !p.isMe ? (
                   <span key={p.live.id} className={s.tagPulse}>
-                    اكتشاف خاص · {PULSE_CATEGORY_LABEL[p.live.category]}
+                    <span className={s.tagPulseLead}>اكتشاف خاص · </span>
+                    {PULSE_CATEGORY_LABEL[p.live.category]}
                   </span>
                 ) : (
                   <span className={s.tagSpecs} aria-label={p.specs.map(specLabel).join('، ')}>

@@ -667,3 +667,10 @@
     animation: none !important;
   }
 }
+
+/* الهاتف: لوحة المادة تحت الضوء أعرض منها طولاً — لا تأكل الشاشة كلها */
+@media (max-width: 600px) {
+  .hero {
+    aspect-ratio: 16 / 9;
+  }
+}

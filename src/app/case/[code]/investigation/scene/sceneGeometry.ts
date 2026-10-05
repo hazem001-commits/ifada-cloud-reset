@@ -81,11 +81,14 @@ function axisRange(
   safeEnd: number,
   insetStart = 0,
   insetEnd = 0,
+  align: 'center' | 'start' = 'center',
 ) {
   const scaled = len * s;
   if (scaled <= view) {
-    const centered = insetStart + (view - insetStart - insetEnd - scaled) / 2;
-    const t = clamp(centered, 0, view - scaled);
+    // 'start': الصورة تلتصق بما فوقها مباشرة (الهاتف عمودياً) — لا فراغ أسود قبلها.
+    const free = view - insetStart - insetEnd - scaled;
+    const wanted = align === 'start' && free >= 0 ? insetStart : insetStart + free / 2;
+    const t = clamp(wanted, 0, view - scaled);
     return { lo: t, hi: t };
   }
   const lo = Math.max(view - scaled, insetStart - safeStart * s);
@@ -100,21 +103,42 @@ function axisRange(
  * التأطير العام للغرفة داخل مساحة العرض.
  * insets: شرائط واجهة ثابتة فوق/تحت المشهد لا يجوز أن تقع تحتها المنطقة الآمنة.
  */
-export function fitScene(view: Size, scene: SceneDefinition, insets = { top: 0, bottom: 0 }): StageTransform {
+export function fitScene(
+  view: Size,
+  scene: SceneDefinition,
+  insets = { top: 0, bottom: 0 },
+  opts: { safe?: Box; align?: 'center' | 'start' } = {},
+): StageTransform {
   const { width: vw, height: vh } = view;
   if (vw <= 0 || vh <= 0) return { scale: 1, tx: 0, ty: 0 };
+  const safe = opts.safe ?? scene.safe;
 
   const cover = Math.max(vw / scene.width, vh / scene.height);
   const usableH = Math.max(1, vh - insets.top - insets.bottom);
-  const fitsSafe = Math.min(vw / scene.safe.w, usableH / scene.safe.h);
+  const fitsSafe = Math.min(vw / safe.w, usableH / safe.h);
   const scale = Math.min(cover, fitsSafe);
 
-  const xr = axisRange(vw, scene.width, scale, scene.safe.x, scene.safe.x + scene.safe.w);
-  const yr = axisRange(vh, scene.height, scale, scene.safe.y, scene.safe.y + scene.safe.h, insets.top, insets.bottom);
+  const xr = axisRange(vw, scene.width, scale, safe.x, safe.x + safe.w);
+  const yr = axisRange(vh, scene.height, scale, safe.y, safe.y + safe.h, insets.top, insets.bottom, opts.align);
 
   const tx = clamp(vw / 2 - scene.focal.x * scale, xr.lo, xr.hi);
   const ty = clamp(vh / 2 - scene.focal.y * scale, yr.lo, yr.hi);
   return { scale, tx, ty };
+}
+
+/**
+ * منطقة آمنة مضغوطة للهاتف عمودياً: اتحاد أجسام التحقيق نفسها (بهامش)،
+ * لا التكوين السينمائي العريض كله. الأجسام تبقى بمواضعها الحقيقية بالصورة —
+ * فقط القص الجانبي للديكور يزيد فيكبر المشهد على الشاشة الضيقة.
+ */
+export function anchorsSafe(scene: SceneDefinition, pad = 24): Box {
+  const boxes = Object.values(scene.anchors).map((a) => a.box);
+  if (boxes.length === 0) return scene.safe;
+  const x0 = Math.max(0, Math.min(...boxes.map((b) => b.x)) - pad);
+  const y0 = Math.max(0, Math.min(...boxes.map((b) => b.y)) - pad);
+  const x1 = Math.min(scene.width, Math.max(...boxes.map((b) => b.x + b.w)) + pad);
+  const y1 = Math.min(scene.height, Math.max(...boxes.map((b) => b.y + b.h)) + pad);
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 }
 
 export interface Rect {

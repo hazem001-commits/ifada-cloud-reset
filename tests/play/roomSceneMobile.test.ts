@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { ROOM_714_PRESENTATION } from '../../src/cases/room-714/presentation';
-import { dossierLayout, fitScene, frameObject, hitBox, toScreen, type Box, type StageTransform } from '../../src/app/case/[code]/investigation/scene/sceneGeometry';
+import { anchorsSafe, dossierLayout, fitScene, frameObject, hitBox, toScreen, type Box, type StageTransform } from '../../src/app/case/[code]/investigation/scene/sceneGeometry';
 
 const scene = ROOM_714_PRESENTATION.scenes.ROOM_714!;
 // scene viewport = device size minus the case header / tab bar (generous)
@@ -86,5 +86,40 @@ test('phone sheet leaves the scene visible above it, and hotspots are never hove
   assert.match(css, /@media \(hover: none\)[\s\S]*\.hintTouch/, 'touch devices get a touch hint, not "hover"');
   assert.match(css, /@media \(max-width: 759px\)[\s\S]*\.margin \{[\s\S]*safe-area-inset-bottom/, 'off-frame entries (the door) clear the floating leads pill and the safe area');
   const dossier = readFileSync('src/app/case/[code]/investigation/dossier.module.css', 'utf8');
-  assert.match(dossier, /\[data-layout='sheet'\] > \.dossier \.scroll \{\s*padding-bottom: calc\(env\(safe-area-inset-bottom/, 'the sheet\'s last action sits above the home indicator');
+  assert.match(dossier, /\[data-layout='sheet'\] > \.dossier \.scroll \{[^}]*padding:[^;]*calc\(env\(safe-area-inset-bottom/, 'the sheet\'s last action sits above the home indicator');
 });
+
+// ------------------------------------------------------------
+// Portrait composition (RoomScene when height > width): the image starts right
+// under the compact place plaque (no black band), is cropped sideways only down
+// to the investigation objects, and keeps a reserved strip at the bottom for the
+// off-frame door entry (+ the leads pill on phones). Same transform for image
+// and hotspots — objects never move away from their real place in the photo.
+// ------------------------------------------------------------
+const PORTRAIT = [
+  { name: '360x800', width: 360, height: 800 - 120, plaque: 86, phone: true },
+  { name: '390x844', width: 390, height: 844 - 124, plaque: 86, phone: true },
+  { name: '430x932', width: 430, height: 932 - 124, plaque: 86, phone: true },
+  { name: '768x1024', width: 768, height: 1024 - 132, plaque: 98, phone: false },
+];
+for (const v of PORTRAIT) {
+  test(`portrait composition ${v.name}: image under the plaque, objects clear of the door strip, ≥44px targets`, () => {
+    const top = v.plaque + 12;
+    const reserve = 112 + (v.phone ? 64 : 0);
+    const t = fitScene(v, scene, { top, bottom: reserve }, { safe: anchorsSafe(scene), align: 'start' });
+    const imageTop = t.ty;
+    const imageBottom = t.ty + scene.height * t.scale;
+    if (imageBottom - imageTop <= v.height) assert.ok(Math.abs(imageTop - top) < 1 || imageTop >= 0, `${v.name}: image starts right under the plaque`);
+    // bigger than the old fit (whole cinematic safe zone): the scene is the priority on a phone
+    // phones: the scene is the priority — never smaller than the plain (whole cinematic safe zone) fit
+    if (v.phone) assert.ok(t.scale >= fitScene(v, scene).scale - 1e-9, `${v.name}: never smaller than the plain fit`);
+    for (const code of [...ROOTS]) {
+      const body = screenRect(scene.anchors[code]!.box, t);
+      assert.ok(body.y0 >= top - 1, `${code}: below the plaque`);
+      assert.ok(body.y1 <= v.height - reserve + 1, `${code}: above the reserved door/leads strip`);
+      assert.ok(body.x0 >= -1 && body.x1 <= v.width + 1, `${code}: fully on screen horizontally`);
+      const hit = hitBox(scene.anchors[code]!.box, t.scale);
+      assert.ok(hit.w * t.scale >= 44 - 0.5 && hit.h * t.scale >= 44 - 0.5, `${code}: ≥ 44px`);
+    }
+  });
+}

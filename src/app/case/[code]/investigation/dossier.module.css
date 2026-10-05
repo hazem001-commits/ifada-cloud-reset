@@ -61,9 +61,38 @@
   scrollbar-color: rgba(236, 227, 207, 0.16) transparent;
 }
 
-/* ورقة الهاتف: آخر فعل فيها فوق مؤشر الرجوع للشاشة الرئيسية (safe-area) */
+/* ورقة الهاتف: أكثف من العمود الجانبي — العنوان والحالة والفعل الأساسي
+   يظهرون معاً بلا تمرير؛ آخر فعل فوق مؤشر الرجوع للشاشة الرئيسية (safe-area). */
 [data-layout='sheet'] > .dossier .scroll {
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 2rem);
+  gap: 0.9rem;
+  padding: 0.55rem 1.1rem calc(env(safe-area-inset-bottom, 0px) + 1.5rem);
+}
+
+[data-layout='sheet'] > .dossier .head {
+  gap: 0.2rem;
+}
+
+[data-layout='sheet'] > .dossier .title {
+  font-size: 1.35rem;
+  line-height: 1.25;
+}
+
+[data-layout='sheet'] > .dossier .observation {
+  font-size: 0.95rem;
+  line-height: 1.75;
+}
+
+/* مقبض بصري: الورقة تُقرأ كورقة فوق الغرفة، لا كصفحة ثانية */
+[data-layout='sheet'] > .dossier::before {
+  content: '';
+  position: absolute;
+  top: 0.4rem;
+  left: 50%;
+  width: 2.25rem;
+  height: 3px;
+  translate: -50% 0;
+  border-radius: 2px;
+  background: rgba(236, 227, 207, 0.18);
 }
 
 /* ---------- مسار: الموقع / الأصل ---------- */
@@ -565,4 +594,10 @@
   .shareBtn {
     transition: none;
   }
+}
+
+/* الهاتف: الرجوع للغرفة هو "Escape" اللمس — هدف 44px */
+[data-layout='sheet'] > .dossier .back,
+[data-layout='sheet'] > .dossier .crumbLink {
+  min-height: 2.75rem;
 }

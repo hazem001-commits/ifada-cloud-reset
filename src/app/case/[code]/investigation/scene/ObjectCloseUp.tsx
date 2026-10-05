@@ -18,14 +18,21 @@ export default function ObjectCloseUp({
   objectCode,
   views,
   frame,
+  roomFirst = false,
 }: {
   sessionId: string;
   objectCode: string;
   views: readonly ObjectView[];
   frame: Rect;
+  /**
+   * الهاتف: المساحة فوق ورقة الفحص ضيقة، واللقطة القريبة كانت تغطيها كلها
+   * (ومعها نقاط الاكتشافات الفرعية مثل الجواز). هناك تبدأ الغرفة المقرّبة
+   * ظاهرة، واللقطة خيار بلمسة واحدة.
+   */
+  roomFirst?: boolean;
 }) {
   const [index, setIndex] = useState(0);
-  const [showRoom, setShowRoom] = useState(false);
+  const [showRoom, setShowRoom] = useState(roomFirst);
   const view = views[Math.min(index, views.length - 1)];
   const { state, onImageError } = useObjectView(sessionId, objectCode, view?.key ?? null);
 
@@ -34,6 +41,7 @@ export default function ObjectCloseUp({
   return (
     <figure
       className={r.closeUp}
+      data-room={showRoom ? 'true' : 'false'}
       style={{ left: frame.x0, top: frame.y0, width: frame.x1 - frame.x0, height: frame.y1 - frame.y0 }}
     >
       {!showRoom && (

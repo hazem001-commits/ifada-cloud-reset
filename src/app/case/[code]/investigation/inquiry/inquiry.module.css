@@ -413,3 +413,22 @@
     transition: none;
   }
 }
+
+/* الهاتف: "اسأل التحقيق" أيقونة 44px بزاوية المشهد — لا تغطي وصف الموقع.
+   التسمية تبقى للقارئ الآلي (aria عبر النص المخفي بصرياً). */
+@media (max-width: 759px) {
+  .trigger {
+    top: 0.6rem;
+    inset-inline-end: 0.75rem;
+    width: 2.75rem;
+    min-height: 2.75rem;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+    font-size: 0;
+  }
+
+  .trigger .kbd {
+    display: none;
+  }
+}

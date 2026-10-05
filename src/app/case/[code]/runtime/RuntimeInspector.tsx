@@ -32,10 +32,12 @@ export default function RuntimeInspector({
     <aside
       dir="rtl"
       aria-label="مفتش المحرك (تطوير)"
+      // الموضع من .dev-runtime (globals.css): أسفل الشاشة العريضة، وأعلاها على
+      // الهاتف — بعيداً عن منطقة الإبهام وأفعال ملف الفحص.
+      className="dev-runtime"
       style={{
         position: 'fixed',
         insetInlineEnd: '0.75rem',
-        bottom: '0.75rem',
         // تحت أوراق اللوحة وأدراجها (z 20) وتحت البث والعارض — لا يغطي واجهة حرجة.
         zIndex: 15,
         maxWidth: 'min(22rem, calc(100vw - 1.5rem))',

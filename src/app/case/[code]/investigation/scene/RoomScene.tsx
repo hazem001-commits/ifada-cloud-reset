@@ -14,12 +14,13 @@
 // ============================================================
 'use client';
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { InvestigationObject } from '@/types/investigationObjects';
 import { useElementSize } from '../../evidence/video/useElementSize';
 import { AFFORDANCE, objectStatus } from '../labels';
 import { CategoryIcon } from '../icons';
 import {
+  anchorsSafe,
   dossierLayout,
   fitScene,
   frameObject,
@@ -92,6 +93,20 @@ export default function RoomScene({
   const photographic = scene !== undefined && image.status !== 'failed';
   const layout = size.width > 0 ? dossierLayout(size, !photographic) : null;
 
+  // تكوين عمودي (هاتف/لوحي عمودي): لوحة الموقع شريط مضغوط بالأعلى، والصورة
+  // تبدأ تحتها مباشرة — لا مسافة سوداء وسط الشاشة. نقيس أسفل اللوحة فعلياً.
+  const portrait = size.height > size.width;
+  const [plaqueBottom, setPlaqueBottom] = useState(0);
+  const plaqueObserver = useRef<ResizeObserver | null>(null);
+  const measurePlaque = useCallback((el: HTMLElement | null) => {
+    plaqueObserver.current?.disconnect();
+    if (!el) return;
+    const read = () => setPlaqueBottom(Math.round(el.offsetTop + el.offsetHeight));
+    plaqueObserver.current = new ResizeObserver(read);
+    plaqueObserver.current.observe(el);
+    read();
+  }, []);
+
   return (
     <div
       ref={ref}
@@ -109,6 +124,7 @@ export default function RoomScene({
           onImageError={onImageError}
           view={size}
           layout={layout}
+          compose={portrait ? { top: plaqueBottom + 12 } : null}
           roots={roots}
           childrenOf={childrenOf}
           byCode={byCode}
@@ -133,7 +149,10 @@ export default function RoomScene({
         locations={locations}
         location={location}
         photographic={photographic}
-        hidden={!!focused && layout?.mode === 'side'}
+        // أثناء الفحص المسار (الموقع / الأصل) بملف الفحص نفسه — اللوحة تتنحّى
+        // حتى لا تغطي الجسم المفحوص على الهاتف.
+        hidden={!!focused}
+        measureRef={measurePlaque}
         onSelect={(code) => {
           onFocus(null);
           onSelectLocation(code);
@@ -165,6 +184,7 @@ function PhotoScene({
   onImageError,
   view,
   layout,
+  compose,
   roots,
   childrenOf,
   byCode,
@@ -178,6 +198,8 @@ function PhotoScene({
   onImageError: () => void;
   view: Size;
   layout: DossierLayout | null;
+  /** تكوين عمودي: الصورة تبدأ تحت لوحة الموقع، وتُقصّ جانبياً حتى أجسام التحقيق. */
+  compose: { top: number } | null;
   roots: InvestigationObject[];
   childrenOf: (code: string) => InvestigationObject[];
   byCode: ReadonlyMap<string, InvestigationObject>;
@@ -208,7 +230,22 @@ function PhotoScene({
 
   // "جاهز" = الصورة الحالية انرسمت فعلاً. رابط جديد (تجديد) يبقى جاهزاً بصرياً.
   const ready = imageUrl !== null && loadedUrl !== null;
-  const base = view.width > 0 ? fitScene(view, scene) : null;
+  // الهامش (مدخل "خارج إطار الصورة" مثل الباب + التلميح) له مساحة محجوزة
+  // أسفل المشهد بالتكوين العمودي: أجسام التحقيق لا تقع تحته أبداً (اللوح
+  // العمودي حيث الصورة تملأ الطول)، وعلى الهاتف فوقه أيضاً زر الخيوط.
+  const hasUnplaced = roots.some((o) => !scene.anchors[o.code]);
+  const reserve = !compose ? 0 : (hasUnplaced ? 112 : 40) + (view.width < 760 ? 64 : 0);
+  const base =
+    view.width > 0
+      ? compose
+        ? fitScene(view, scene, { top: compose.top, bottom: reserve }, { safe: anchorsSafe(scene), align: 'start' })
+        : fitScene(view, scene)
+      : null;
+  // والهامش يلتصق تحت الصورة مباشرة إن انتهت قبل المساحة المحجوزة (الهاتف)؛
+  // وإلا يبقى بحافة المشهد السفلى داخل المساحة المحجوزة نفسها.
+  const imageBottom = base ? base.ty + scene.height * base.scale : 0;
+  const marginStyle: CSSProperties | undefined =
+    compose && base && view.height - imageBottom >= reserve + 14 ? { top: Math.round(imageBottom + 14), bottom: 'auto' } : undefined;
 
   // الجسم المفحوص: موضعه الخاص، أو موضع أصله لو كان فرعياً بلا موضع.
   const focusAnchor: SceneAnchor | undefined = focused
@@ -344,6 +381,7 @@ function PhotoScene({
           objectCode={focused.code}
           views={closeUpViews}
           frame={layout.free}
+          roomFirst={layout.mode === 'sheet'}
         />
       )}
 
@@ -354,7 +392,7 @@ function PhotoScene({
       )}
 
       {ready && !focused && (unplaced.length > 0 || !explored) && (
-        <div className={r.margin}>
+        <div className={r.margin} style={marginStyle}>
           {unplaced.length > 0 && (
             <section className={r.offFrame} aria-labelledby="off-frame-title">
               <h2 id="off-frame-title" className={r.offFrameTitle}>

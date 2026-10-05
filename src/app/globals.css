@@ -680,3 +680,17 @@ a {
   animation-delay: 0.15s;
   opacity: 0;
 }
+
+/* DEV ONLY — مفتش المحرك: لا يزاحم أفعال اللعب على الهاتف */
+.dev-runtime {
+  bottom: 0.75rem;
+}
+
+@media (max-width: 1100px), (pointer: coarse) {
+  .dev-runtime {
+    bottom: auto;
+    top: calc(env(safe-area-inset-top, 0px) + 0.15rem);
+    padding: 0.05rem 0.4rem !important;
+    opacity: 0.75;
+  }
+}

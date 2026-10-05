@@ -6,7 +6,7 @@
 // ============================================================
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { specLabel, type Specialization } from '@/types/database';
 import { useCaseId } from '@/cases/CaseContext';
 import { getCaseContract } from '@/cases/registry';
@@ -83,6 +83,31 @@ export default function CaseNav({
     .map((g) => ({ ...g, tabs: g.tabs.filter((t) => caseTabEnabled(t.id, contract)) }))
     .filter((g) => g.tabs.length > 0);
 
+  // شريط التبويبات على الهاتف يُمرَّر أفقياً عن قصد: الحافة تتلاشى فقط حيث
+  // يوجد المزيد (بداية/نهاية)، والتبويب النشط يُسحب دائماً إلى المشهد.
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const update = () => {
+      const max = nav.scrollWidth - nav.clientWidth;
+      const pos = Math.abs(nav.scrollLeft); // RTL: scrollLeft سالب في كروميوم/سفاري
+      nav.dataset.more = max <= 2 ? 'none' : pos <= 2 ? 'end' : pos >= max - 2 ? 'start' : 'both';
+    };
+    update();
+    nav.addEventListener('scroll', update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(nav);
+    return () => {
+      nav.removeEventListener('scroll', update);
+      ro.disconnect();
+    };
+  }, []);
+  useEffect(() => {
+    const active = navRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    active?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' as ScrollBehavior });
+  }, [tab]);
+
   return (
     <header className={s.bar}>
       <div className={s.identity}>
@@ -97,7 +122,7 @@ export default function CaseNav({
         </span>
       </div>
 
-      <nav className={s.nav} aria-label="أقسام القضية">
+      <nav ref={navRef} className={s.nav} aria-label="أقسام القضية" data-more="none">
         {groups.map((g) => (
           <div key={g.key} className={`${s.group} ${g.className}`} role="group" aria-label={g.label}>
             {g.tabs.map((t, i) => (
